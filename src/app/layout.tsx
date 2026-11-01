@@ -15,7 +15,9 @@ const montserrat = localFont({
 });
 
 export const metadata: Metadata = { title: "RideDeck", description: "Ride coach for the Peloton Bike" };
-export const viewport: Viewport = { width: 1280, initialScale: 1 };
+// device-width, not a fixed 1280: Stage scales the 1280x800 canvas to whatever the window is.
+// (A fixed width made portrait phones lay out ~2,800px tall and pushed the canvas off screen.)
+export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
