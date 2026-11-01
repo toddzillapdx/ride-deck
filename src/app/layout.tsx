@@ -1,10 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["200", "300", "400", "500"],
+// Self-hosted Montserrat (latin), so builds and the tablet never depend on Google Fonts.
+const montserrat = localFont({
+  src: [
+    { path: "../fonts/montserrat-latin-200-normal.woff2", weight: "200", style: "normal" },
+    { path: "../fonts/montserrat-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../fonts/montserrat-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/montserrat-latin-500-normal.woff2", weight: "500", style: "normal" },
+  ],
   variable: "--font-montserrat",
   display: "swap",
 });
