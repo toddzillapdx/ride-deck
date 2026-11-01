@@ -5,7 +5,7 @@ import Stage from "./Stage";
 import { PRESETS, isPresetId, totalSeconds } from "@/lib/presets";
 import { fmtClock } from "@/lib/format";
 import {
-  GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, toCsv, toText,
+  GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, toCsv, toPlaylistPrompt, toText,
 } from "@/lib/music";
 import type { Segment, Track, Workout } from "@/lib/types";
 
@@ -102,6 +102,10 @@ export default function MusicPlanner() {
     try { await navigator.clipboard.writeText(toText(tracks)); setMsg({ text: "Copied. Paste it into the Claude in Chrome chat.", ok: true }); }
     catch { setMsg({ text: "Couldn't copy automatically. Allow clipboard access and try again." }); }
   };
+  const copyPrompt = async () => {
+    try { await navigator.clipboard.writeText(toPlaylistPrompt(workout, tracks.map(strip), genre, vibe)); setMsg({ text: "Prompt and songs copied. Paste it into a Claude in Chrome chat.", ok: true }); }
+    catch { setMsg({ text: "Couldn't copy automatically. Allow clipboard access and try again." }); }
+  };
   const download = () => {
     const url = URL.createObjectURL(new Blob([toCsv(workout, tracks.map(strip))], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -167,13 +171,15 @@ export default function MusicPlanner() {
                 {tracks.length} song{tracks.length === 1 ? "" : "s"} · {fmtClock(plannedSec)} of {fmtClock(rideSec)}
               </span>
             </div>
-            <div className="flex flex-none gap-2">
-              <button onClick={copy} disabled={!tracks.length} className={`${pill} disabled:opacity-40`}>Copy list</button>
-              <button onClick={download} disabled={!tracks.length} className={`${pill} disabled:opacity-40`}>Download CSV</button>
-              <button onClick={save} disabled={!tracks.length || saving} className="h-11 rounded-full bg-ice px-5 text-[14px] font-medium text-ground disabled:opacity-40">
-                {saving ? "Saving…" : isPresetId(workout.id) ? "Save as new ride" : "Save to ride"}
-              </button>
-            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={copyPrompt} disabled={!tracks.length} className="h-11 rounded-full bg-ice px-5 text-[14px] font-medium text-ground disabled:opacity-40">Copy prompt + playlist</button>
+            <button onClick={copy} disabled={!tracks.length} className={`${pill} disabled:opacity-40`}>Copy list</button>
+            <button onClick={download} disabled={!tracks.length} className={`${pill} disabled:opacity-40`}>Download CSV</button>
+            <button onClick={save} disabled={!tracks.length || saving} className={`${pill} ml-auto disabled:opacity-40`}>
+              {saving ? "Saving…" : isPresetId(workout.id) ? "Save as new ride" : "Save to ride"}
+            </button>
           </div>
 
           <div className="flex items-center gap-3">

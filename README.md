@@ -20,7 +20,7 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 ## Music workflow
 
 1. On your computer open **Plan music** (`/music`), pick a ride, genre and vibe, and plan a tracklist. Songs are paced to each segment: slower and heavier for warm-up, climbs, recovery and cool-down, upbeat for flat and sprint. Lock songs you like, **swap** one song, **redo** a segment, or **regenerate unlocked** for the rest. BPMs and lengths are approximate and not verified, and songs are suggestions you should check in Amazon Music.
-2. **Copy list** gives `Artist - Title` per line. Paste it into a Claude in Chrome chat and ask it to build the playlist in Amazon Music. **Download CSV** and per-song **Find on Amazon** links are there too.
+2. **Copy prompt + playlist** copies one block: the instructions (name, order, original studio versions, skip what you can't find, no purchases, reply with the share link) followed by the numbered songs. Paste it into a Claude in Chrome chat with Amazon Music signed in. **Copy list** (plain `Artist - Title` lines), **Download CSV** and per-song **Find on Amazon** links are there too.
 3. Paste the playlist link into the field on the planner and **Save to ride** (presets save as a new ride). On the tablet, the ride screen shows Now and Next songs as a guide, and **Open playlist** opens the link. RideDeck never plays or controls audio.
 
 The planner calls `claude-opus-5-5` from the server route `/api/music/plan` with structured output, low effort and the server-side refusal fallback. Each request fills only the segments being redone, and the server drops repeats, out-of-range segments and bad numbers before anything reaches the page.
