@@ -1,4 +1,5 @@
 import { parseWorkout } from "./validate";
+import { parseLogInput, type LogInput, type RideLog } from "./history";
 import { totalSeconds } from "./presets";
 import type { Workout } from "./types";
 
@@ -88,4 +89,75 @@ export async function updateRide(id: string, w: Workout): Promise<Workout> {
 
 export async function deleteRide(id: string): Promise<void> {
   await call(`${TABLE}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ---- Ride history (RideLog table) ----
+const LOG_TABLE = "RideLog";
+
+export function toLogFields(l: LogInput) {
+  return {
+    Name: l.rideName,
+    RideId: l.rideId,
+    StartedAt: l.startedAt,
+    ElapsedSeconds: l.elapsedSec,
+    PlannedSeconds: l.plannedSec,
+    SegmentsCompleted: l.segmentsCompleted,
+    SegmentsTotal: l.segmentsTotal,
+    ...(l.kcal === undefined ? {} : { Kcal: l.kcal }),
+    ...(l.notes ? { Notes: l.notes } : {}),
+    SegmentsJson: JSON.stringify(l.segments),
+  };
+}
+
+export function fromLogRecord(r: AtRecord): RideLog {
+  const f = r.fields;
+  const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  let segments: RideLog["segments"] = [];
+  try {
+    segments = parseLogInput({
+      rideName: "x", rideId: "", startedAt: "2000-01-01", elapsedSec: 0, plannedSec: 0, segmentsCompleted: 0,
+      segments: JSON.parse(String(f.SegmentsJson ?? "[]")),
+    }).segments;
+  } catch { /* an unreadable snapshot just means no chart */ }
+  return {
+    id: r.id,
+    rideId: typeof f.RideId === "string" ? f.RideId : "",
+    rideName: typeof f.Name === "string" ? f.Name : "Ride",
+    startedAt: typeof f.StartedAt === "string" ? f.StartedAt : new Date(0).toISOString(),
+    elapsedSec: num(f.ElapsedSeconds),
+    plannedSec: num(f.PlannedSeconds),
+    segmentsCompleted: num(f.SegmentsCompleted),
+    segmentsTotal: num(f.SegmentsTotal) || segments.length,
+    ...(typeof f.Kcal === "number" ? { kcal: f.Kcal } : {}),
+    ...(typeof f.Notes === "string" && f.Notes ? { notes: f.Notes } : {}),
+    segments,
+  };
+}
+
+export async function listLogs(): Promise<RideLog[]> {
+  const logs: RideLog[] = [];
+  let offset: string | undefined;
+  do {
+    const q = new URLSearchParams({ pageSize: "100", "sort[0][field]": "StartedAt", "sort[0][direction]": "desc" });
+    if (offset) q.set("offset", offset);
+    const page = await call(`${LOG_TABLE}?${q}`);
+    for (const r of page.records as AtRecord[]) logs.push(fromLogRecord(r));
+    offset = page.offset;
+  } while (offset);
+  return logs;
+}
+
+export async function createLog(l: LogInput): Promise<RideLog> {
+  return fromLogRecord(await call(LOG_TABLE, { method: "POST", body: JSON.stringify({ fields: toLogFields(l) }) }));
+}
+
+export async function updateLog(id: string, patch: { kcal?: number | null; notes?: string | null }): Promise<RideLog> {
+  const fields: Record<string, unknown> = {};
+  if ("kcal" in patch) fields.Kcal = patch.kcal; // null clears the cell
+  if ("notes" in patch) fields.Notes = patch.notes ?? "";
+  return fromLogRecord(await call(`${LOG_TABLE}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ fields }) }));
+}
+
+export async function deleteLog(id: string): Promise<void> {
+  await call(`${LOG_TABLE}/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

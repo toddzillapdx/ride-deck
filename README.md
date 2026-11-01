@@ -11,11 +11,17 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 | 3. Airtable storage, library, presets, import/export | done (needs env vars set, see below) |
 | 4. Workout builder | done |
 | 5. Music planner | done (needs `ANTHROPIC_API_KEY`) |
-| 6. Ride summary and history | todo |
+| 6. Ride summary and history | done |
 
 ## Builder
 
 `/builder/new` creates a ride, `/builder/<id>` edits a saved one, and `/builder/new?from=<id>` copies any ride (presets always open as a copy, since they are read-only). Add segments by type, use the Intervals box for work/rest pairs, reorder with the arrows, duplicate or delete a segment, and leave cadence or resistance blank for no target. Tracks attached by the music planner follow their segment when you reorder or duplicate. Saving needs Airtable to be configured.
+
+## Ride summary and history
+
+When a ride finishes, or you hold **End ride**, RideDeck records it to history right away (ride, start time, time ridden, segments completed, and a snapshot of the targets, so later edits to the ride don't change the past). The finish screen shows the time, segments and a chart of target cadence and resistance by segment, with segments you didn't reach faded.
+
+**Calories:** type the kcal from the Peloton screen into the field and press Save. RideDeck does not read it from the bike. It is a whole number from 0 to 5000, and clearing the field removes it. You can add or fix it later on **History** (`/history`), which lists rides newest first with totals, a per-ride chart (tap a segment for its numbers), **Ride again**, and **Delete entry**. If Airtable is unreachable the finish screen says so and offers Retry, and the calories you typed are included when it retries.
 
 ## Music workflow
 
@@ -45,9 +51,9 @@ Import the repo in Vercel, framework preset Next.js, and set these in Project Se
 | `ANTHROPIC_API_KEY` | Music planner. |
 | `PLANNER_PASSCODE` | Optional but recommended. If set, the planner API requires it (the planner screen asks once and remembers it in that browser). Without it anyone who finds the URL can spend your Anthropic credit. |
 
-Without the Airtable vars the app still works with the built-in presets, and the library shows "Airtable not configured". The `Rides` table needs the fields Name, Genre, Vibe, PlaylistUrl, TotalSeconds, WorkoutJson and UpdatedAt. `WorkoutJson` is the source of truth.
+Without the Airtable vars the app still works with the built-in presets, and the library shows "Airtable not configured". The `Rides` table needs the fields Name, Genre, Vibe, PlaylistUrl, TotalSeconds, WorkoutJson and UpdatedAt. `WorkoutJson` is the source of truth. History lives in a second table, `RideLog`, with Name, RideId, StartedAt, ElapsedSeconds, PlannedSeconds, SegmentsCompleted, SegmentsTotal, Kcal, Notes and SegmentsJson (the same token covers it).
 
-API: `GET/POST /api/rides`, `GET/PUT/DELETE /api/rides/[id]`. Presets are read-only (`preset-` ids).
+API: `GET/POST /api/rides`, `GET/PUT/DELETE /api/rides/[id]`, `POST /api/music/plan`, `GET/POST /api/history`, `PATCH/DELETE /api/history/[id]`. Presets are read-only (`preset-` ids).
 
 ## On the Fire HD 10
 

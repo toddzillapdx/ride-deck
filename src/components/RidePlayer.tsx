@@ -8,6 +8,7 @@ import Stage from "./Stage";
 import RideScreen, { type RideView } from "./RideScreen";
 import ChangeScreen from "./ChangeScreen";
 import TapBanner from "./TapBanner";
+import FinishScreen from "./FinishScreen";
 
 const WARN_SEC = 10; // change screen window
 const TAP_EVERY = 600; // tap prompt cadence (seconds of ride time)
@@ -33,6 +34,8 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
   const [phase, setPhase] = useState<Phase>("ready");
   const [menu, setMenu] = useState(false);
   const [nextPrompt, setNextPrompt] = useState(TAP_EVERY);
+  const [startedAt, setStartedAt] = useState("");
+  const [runId, setRunId] = useState(0); // new id per ride, so each finish records once
 
   const elapsed = Math.min(total, clock.elapsedMs / 1000);
   const index = Math.max(0, segs.findIndex((_, i) => elapsed < starts[i] + segs[i].durationSec));
@@ -73,6 +76,7 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
 
   // Controls
   const startRide = () => {
+    setStartedAt(new Date().toISOString());
     clock.start();
     setPhase("riding");
     setNextPrompt(clock.elapsedMs / 1000 + TAP_EVERY);
@@ -89,6 +93,7 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
     setMenu(false);
   };
   const again = () => {
+    setRunId((n) => n + 1);
     clock.reset();
     setPhase("ready");
     setNextPrompt(TAP_EVERY);
@@ -133,13 +138,15 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
         )}
 
         {phase === "done" && (
-          <Overlay>
-            <div className="text-[13px] font-medium uppercase tracking-[.2em] text-mist">Ride complete</div>
-            <div className="num text-[88px] font-extralight">{fmtClock(Math.min(total, clock.elapsedMs / 1000))}</div>
-            <div className="text-[20px] text-mist">of {fmtClock(total)} · {workout.name}</div>
-            <BigButton onClick={again}>Ride again</BigButton>
-            <a href="/" className="text-[16px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
-          </Overlay>
+          <FinishScreen
+            key={runId}
+            workout={workout}
+            startedAt={startedAt || new Date().toISOString()}
+            elapsedSec={Math.min(total, clock.elapsedMs / 1000)}
+            endedEarly={clock.elapsedMs / 1000 < total - 0.5}
+            segmentsCompleted={clock.elapsedMs / 1000 >= total - 0.5 ? segs.length : index}
+            onAgain={again}
+          />
         )}
 
         {phase === "riding" && (
