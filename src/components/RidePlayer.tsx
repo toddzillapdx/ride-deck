@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SAMPLE_WORKOUT } from "@/lib/workouts";
+import type { Workout } from "@/lib/types";
 import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
 import Stage from "./Stage";
@@ -13,8 +13,7 @@ const TAP_EVERY = 600; // tap prompt cadence (seconds of ride time)
 
 type Phase = "ready" | "riding" | "done";
 
-export default function RidePlayer() {
-  const workout = SAMPLE_WORKOUT;
+export default function RidePlayer({ workout }: { workout: Workout }) {
   const segs = workout.segments;
   const total = useMemo(() => segs.reduce((n, s) => n + s.durationSec, 0), [segs]);
   const starts = useMemo(() => {
@@ -132,6 +131,7 @@ export default function RidePlayer() {
             <div className="text-[13px] font-medium uppercase tracking-[.2em] text-mist">{workout.name}</div>
             <div className="text-[34px] font-light">{fmtClock(total)} · {segs.length} segments</div>
             <BigButton onClick={startRide}>Start ride</BigButton>
+            <a href="/" className="text-[16px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
             {speed !== 1 && <div className="text-[14px] text-mist">Test mode: {speed}x clock</div>}
           </Overlay>
         )}
@@ -142,6 +142,7 @@ export default function RidePlayer() {
             <div className="num text-[88px] font-extralight">{fmtClock(Math.min(total, clock.elapsedMs / 1000))}</div>
             <div className="text-[20px] text-mist">of {fmtClock(total)} · {workout.name}</div>
             <BigButton onClick={again}>Ride again</BigButton>
+            <a href="/" className="text-[16px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
           </Overlay>
         )}
 

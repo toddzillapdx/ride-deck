@@ -6,8 +6,9 @@ export interface Segment {
   name: string;
   type: SegmentType;
   durationSec: number;
-  cadence: Target;
-  resistance: Target;
+  /** Optional so a free ride can be timer-only. */
+  cadence?: Target;
+  resistance?: Target;
   cue: string;
 }
 

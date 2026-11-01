@@ -43,7 +43,7 @@ export default function ChangeScreen({ index, count, seg, next, secondsLeft, ela
   );
 }
 
-function Card({ label, color, word, value, from }: { label: string; color: string; word: string; value: Target; from: Target }) {
+function Card({ label, color, word, value, from }: { label: string; color: string; word: string; value: Target | undefined; from: Target | undefined }) {
   return (
     <div className="flex flex-1 flex-col justify-between rounded-[24px] bg-ground" style={{ padding: "28px 36px" }}>
       <div className="flex items-baseline justify-between">
@@ -51,7 +51,7 @@ function Card({ label, color, word, value, from }: { label: string; color: strin
         <span className="text-[15px] font-medium tracking-[.14em] text-ink">{word}</span>
       </div>
       <span className="num text-[84px] font-light" style={{ color }}>{fmtTarget(value)}</span>
-      <span className="text-[17px] font-light text-mist" style={{ letterSpacing: ".02em" }}>from {fmtTarget(from)}</span>
+      <span className="text-[17px] font-light text-mist" style={{ letterSpacing: ".02em" }}>{from === undefined ? "" : `from ${fmtTarget(from)}`}</span>
     </div>
   );
 }

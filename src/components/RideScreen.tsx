@@ -62,8 +62,8 @@ export default function RideScreen({ v }: { v: RideView }) {
 
       {/* targets */}
       <div className="flex min-h-0 flex-1 gap-6">
-        <Tile label="Cadence" unit="RPM" color="#C4DFE6" value={fmtTarget(seg.cadence)} foot={wasLine(prev?.cadence, seg.cadence)} />
-        <Tile label="Resistance" unit="0–100" color="#66A5AD" value={fmtTarget(seg.resistance)} foot={wasLine(prev?.resistance, seg.resistance)} />
+        <Tile label="Cadence" unit="RPM" color="#C4DFE6" value={fmtTarget(seg.cadence)} foot={wasLine(prev?.cadence, seg.cadence, !prev)} />
+        <Tile label="Resistance" unit="0–100" color="#66A5AD" value={fmtTarget(seg.resistance)} foot={wasLine(prev?.resistance, seg.resistance, !prev)} />
       </div>
 
       {/* cue row */}

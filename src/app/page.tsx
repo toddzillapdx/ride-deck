@@ -1,5 +1,5 @@
-import RidePlayer from "@/components/RidePlayer";
+import Library from "@/components/Library";
 
 export default function Home() {
-  return <RidePlayer />;
+  return <Library />;
 }

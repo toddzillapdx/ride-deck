@@ -8,7 +8,7 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 |---|---|
 | 1. Skeleton, ride screen, drift-proof timer | done |
 | 2. Change-warning screen, tap-to-stay-awake | done |
-| 3. Airtable storage, library, presets, import/export | next (needs the Airtable base ID) |
+| 3. Airtable storage, library, presets, import/export | done (needs env vars set, see below) |
 | 4. Workout builder | todo |
 | 5. Music planner | todo |
 | 6. Ride summary and history | todo |
@@ -24,7 +24,17 @@ Append `?speed=50` to run the clock 50x, which is handy for seeing the 10-second
 
 ## Deploy (Vercel)
 
-Import the repo in Vercel, framework preset Next.js. No env vars are needed yet. From step 3 on, set `AIRTABLE_TOKEN` and `AIRTABLE_BASE_ID`; from step 5, `ANTHROPIC_API_KEY`. See `.env.example`.
+Import the repo in Vercel, framework preset Next.js, and set these in Project Settings, Environment Variables (never in browser code):
+
+| Variable | Needed for |
+|---|---|
+| `AIRTABLE_TOKEN` | Saved rides. A personal access token with `data.records:read` and `data.records:write` on the RideDeck base only. |
+| `AIRTABLE_BASE_ID` | The RideDeck base (`app...`). |
+| `ANTHROPIC_API_KEY` | Music planner (step 5). |
+
+Without the Airtable vars the app still works with the built-in presets, and the library shows "Airtable not configured". The `Rides` table needs the fields Name, Genre, Vibe, PlaylistUrl, TotalSeconds, WorkoutJson and UpdatedAt. `WorkoutJson` is the source of truth.
+
+API: `GET/POST /api/rides`, `GET/PUT/DELETE /api/rides/[id]`. Presets are read-only (`preset-` ids).
 
 ## On the Fire HD 10
 
@@ -32,4 +42,4 @@ Open the deployed URL in Silk and bookmark it. Don't rely on PWA install. Screen
 
 ## Workout JSON
 
-See section 4 of the brief. Segments have `name`, `type`, `durationSec`, `cadence` and `resistance` (a `[min, max]` range or a single number) and `cue`. A sample ride lives in `src/lib/workouts.ts`.
+See section 4 of the brief. Segments have `name`, `type`, `durationSec`, `cadence` and `resistance` (a `[min, max]` range or a single number) and `cue`. Built-in presets live in `src/lib/presets.ts`. Cadence and resistance are optional, so a ride can be timer-only.
