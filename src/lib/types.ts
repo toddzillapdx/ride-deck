@@ -1,0 +1,29 @@
+export type SegmentType = "warmup" | "flat" | "climb" | "sprint" | "recover" | "cooldown";
+/** A target is a [min, max] range or a single number. */
+export type Target = [number, number] | number;
+
+export interface Segment {
+  name: string;
+  type: SegmentType;
+  durationSec: number;
+  cadence: Target;
+  resistance: Target;
+  cue: string;
+}
+
+export interface Track {
+  segmentIndex: number;
+  title: string;
+  artist: string;
+  approxBpm?: number;
+}
+
+export interface Workout {
+  id: string;
+  name: string;
+  genre?: string;
+  vibe?: string;
+  playlistUrl?: string;
+  segments: Segment[];
+  tracklist?: Track[];
+}
