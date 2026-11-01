@@ -54,6 +54,7 @@ export default function Library() {
             <button onClick={() => setModal({ kind: "import" })} className="h-[44px] rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">
               Import JSON
             </button>
+            <a href="/music" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">Plan music</a>
             <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>
           </div>
         </div>
@@ -97,6 +98,7 @@ function Card({ w, onExport, onDelete }: { w: Workout; onExport: () => void; onD
         <span className="flex gap-4 text-[13px] font-normal text-mist">
           {onDelete && !isPresetId(w.id) && <a href={`/builder/${w.id}`} className="underline underline-offset-4">Edit</a>}
           <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate</a>
+          <a href={`/music?ride=${w.id}`} className="underline underline-offset-4">Music</a>
           <button onClick={onExport} className="underline underline-offset-4">Export</button>
           {onDelete && !isPresetId(w.id) && <button onClick={onDelete} className="underline underline-offset-4">Delete</button>}
         </span>

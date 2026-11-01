@@ -17,6 +17,10 @@ export interface Track {
   title: string;
   artist: string;
   approxBpm?: number;
+  /** Approximate song length in seconds, used to pace songs against segments. */
+  approxDurationSec?: number;
+  /** One line on why the song fits the segment. */
+  reason?: string;
 }
 
 export interface Workout {

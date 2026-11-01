@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Workout } from "@/lib/types";
 import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
+import { trackAt } from "@/lib/music";
 import Stage from "./Stage";
 import RideScreen, { type RideView } from "./RideScreen";
 import ChangeScreen from "./ChangeScreen";
@@ -101,13 +102,8 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
     return () => clearTimeout(id);
   }, [menu]);
 
-  const tracks = workout.tracklist ?? [];
-  const view: RideView = {
-    workout, index, segElapsed, elapsed, total,
-    tapIn: Math.max(0, nextPrompt - elapsed),
-    now: tracks.find((t) => t.segmentIndex === index),
-    next: tracks.find((t) => t.segmentIndex === index + 1),
-  };
+  const { now, next } = trackAt(workout, elapsed);
+  const view: RideView = { workout, index, segElapsed, elapsed, total, tapIn: Math.max(0, nextPrompt - elapsed), now, next };
 
   const warning = phase === "riding" && index < segs.length - 1 && segLeft <= WARN_SEC;
   const showTap = phase === "riding" && !warning && elapsed >= nextPrompt;

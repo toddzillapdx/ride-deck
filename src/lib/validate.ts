@@ -42,7 +42,12 @@ export function parseWorkout(input: unknown): Workout {
       const t = (raw ?? {}) as Record<string, unknown>;
       if (!isNum(t.segmentIndex) || t.segmentIndex < 0 || t.segmentIndex >= segments.length) throw new Error(`Track ${i + 1} has a bad segmentIndex`);
       if (typeof t.title !== "string" || typeof t.artist !== "string") throw new Error(`Track ${i + 1} needs title and artist`);
-      return { segmentIndex: t.segmentIndex, title: t.title, artist: t.artist, ...(isNum(t.approxBpm) ? { approxBpm: t.approxBpm } : {}) };
+      return {
+        segmentIndex: t.segmentIndex, title: t.title, artist: t.artist,
+        ...(isNum(t.approxBpm) ? { approxBpm: t.approxBpm } : {}),
+        ...(isNum(t.approxDurationSec) ? { approxDurationSec: t.approxDurationSec } : {}),
+        ...(typeof t.reason === "string" && t.reason ? { reason: t.reason } : {}),
+      };
     });
   }
 
