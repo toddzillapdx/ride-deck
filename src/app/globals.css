@@ -7,3 +7,5 @@ body { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 
 .num { line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 @keyframes tap-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.025); } }
 .tap-pulse { animation: tap-pulse 1s ease-in-out infinite; }
+
+input, textarea, select { user-select: text; font-family: inherit; }

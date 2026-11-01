@@ -9,9 +9,13 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 | 1. Skeleton, ride screen, drift-proof timer | done |
 | 2. Change-warning screen, tap-to-stay-awake | done |
 | 3. Airtable storage, library, presets, import/export | done (needs env vars set, see below) |
-| 4. Workout builder | todo |
+| 4. Workout builder | done |
 | 5. Music planner | todo |
 | 6. Ride summary and history | todo |
+
+## Builder
+
+`/builder/new` creates a ride, `/builder/<id>` edits a saved one, and `/builder/new?from=<id>` copies any ride (presets always open as a copy, since they are read-only). Add segments by type, use the Intervals box for work/rest pairs, reorder with the arrows, duplicate or delete a segment, and leave cadence or resistance blank for no target. Tracks attached by the music planner follow their segment when you reorder or duplicate. Saving needs Airtable to be configured.
 
 ## Local dev
 

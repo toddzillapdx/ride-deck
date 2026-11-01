@@ -50,9 +50,12 @@ export default function Library() {
             <span className="text-[34px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
             <span className={`text-[13px] font-medium uppercase tracking-[.18em] ${status === "error" ? "text-ice" : "text-mist"}`}>{statusText}</span>
           </div>
-          <button onClick={() => setModal({ kind: "import" })} className="h-[44px] rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">
-            Import JSON
-          </button>
+          <div className="flex gap-3">
+            <button onClick={() => setModal({ kind: "import" })} className="h-[44px] rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">
+              Import JSON
+            </button>
+            <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
@@ -92,6 +95,8 @@ function Card({ w, onExport, onDelete }: { w: Workout; onExport: () => void; onD
           {fmtClock(totalSeconds(w))} · {w.segments.length} segment{w.segments.length === 1 ? "" : "s"}{climbs ? ` · ${climbs} climb${climbs > 1 ? "s" : ""}` : ""}{sprints ? ` · ${sprints} sprint${sprints > 1 ? "s" : ""}` : ""}
         </span>
         <span className="flex gap-4 text-[13px] font-normal text-mist">
+          {onDelete && !isPresetId(w.id) && <a href={`/builder/${w.id}`} className="underline underline-offset-4">Edit</a>}
+          <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate</a>
           <button onClick={onExport} className="underline underline-offset-4">Export</button>
           {onDelete && !isPresetId(w.id) && <button onClick={onDelete} className="underline underline-offset-4">Delete</button>}
         </span>
