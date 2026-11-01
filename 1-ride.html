@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>RideDeck comp: Ride screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500&display=swap">
+<style>
+body{margin:0;background:#002A33}
+</style>
+</head>
+<body>
+<div style="width:1280px;height:800px;box-sizing:border-box;background:#002A33;color:#F4F5F7;font-family:'Montserrat',system-ui,sans-serif;font-weight:300;padding:36px 56px 40px;display:flex;flex-direction:column;gap:24px">
+
+<div style="display:flex;justify-content:space-between;align-items:flex-end">
+<div style="display:flex;flex-direction:column;gap:8px;width:280px">
+<span style="font-size:13px;font-weight:500;letter-spacing:.18em;color:#66A5AD">ELAPSED</span>
+<span style="font-weight:300;font-size:52px;line-height:1;letter-spacing:-.01em">13:48</span>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<span style="font-size:14px;font-weight:500;letter-spacing:.18em;color:#C4DFE6">CLIMB · SEGMENT 3 OF 7</span>
+<span style="font-weight:200;font-size:88px;line-height:1;letter-spacing:-.02em">1:12</span>
+</div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;width:280px">
+<span style="font-size:13px;font-weight:500;letter-spacing:.18em;color:#66A5AD">REMAINING</span>
+<span style="font-weight:300;font-size:52px;line-height:1;letter-spacing:-.01em">16:12</span>
+</div>
+</div>
+
+<div style="display:flex;gap:6px;height:28px" aria-label="Ride timeline">
+<div style="flex:5 1 0;background:#07575B;border-radius:6px"></div>
+<div style="flex:5 1 0;background:#07575B;border-radius:6px"></div>
+<div style="flex:5 1 0;background:#003B46;border:2px solid #C4DFE6;border-radius:6px;box-sizing:border-box;overflow:hidden"><div style="width:76%;height:100%;background:#C4DFE6"></div></div>
+<div style="flex:3 1 0;background:#003B46;border:2px solid #07575B;border-radius:6px;box-sizing:border-box"></div>
+<div style="flex:2 1 0;background:#003B46;border:2px solid #07575B;border-radius:6px;box-sizing:border-box"></div>
+<div style="flex:5 1 0;background:#003B46;border:2px solid #07575B;border-radius:6px;box-sizing:border-box"></div>
+<div style="flex:5 1 0;background:#003B46;border:2px solid #07575B;border-radius:6px;box-sizing:border-box"></div>
+</div>
+
+<div style="flex:1;display:flex;gap:24px;min-height:0">
+<div style="flex:1;background:#003B46;border:2px solid #07575B;border-radius:28px;padding:28px 36px;display:flex;flex-direction:column;justify-content:space-between">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<span style="font-size:15px;font-weight:500;letter-spacing:.2em;color:#C4DFE6">CADENCE</span>
+<span style="font-size:15px;font-weight:400;letter-spacing:.1em;color:#66A5AD">RPM</span>
+</div>
+<span style="font-weight:300;font-size:140px;line-height:1;letter-spacing:-.03em;color:#C4DFE6">60–70</span>
+<span style="font-size:17px;font-weight:300;letter-spacing:.02em;color:#66A5AD">Was 85–95 · down 25</span>
+</div>
+<div style="flex:1;background:#003B46;border:2px solid #07575B;border-radius:28px;padding:28px 36px;display:flex;flex-direction:column;justify-content:space-between">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<span style="font-size:15px;font-weight:500;letter-spacing:.2em;color:#66A5AD">RESISTANCE</span>
+<span style="font-size:15px;font-weight:400;letter-spacing:.1em;color:#66A5AD">0–100</span>
+</div>
+<span style="font-weight:300;font-size:140px;line-height:1;letter-spacing:-.03em;color:#66A5AD">55–65</span>
+<span style="font-size:17px;font-weight:300;letter-spacing:.02em;color:#66A5AD">Was 40–50 · up 15</span>
+</div>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;height:44px">
+<span style="font-size:24px;font-weight:300;letter-spacing:.005em">Heavy and slow. Stay seated, shoulders loose.</span>
+<span style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:400;letter-spacing:.04em;color:#66A5AD;border:2px solid #07575B;border-radius:22px;padding:9px 18px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66A5AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11V5a2 2 0 0 1 4 0v6"/><path d="M13 9a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7 6 6 0 0 1-5-3l-2-4a2 2 0 0 1 3-2l2 2"/></svg>
+Screen tap in 4:12
+</span>
+</div>
+
+<div style="display:flex;gap:24px;height:128px">
+<div style="flex:1.3;background:#003B46;border-radius:20px;padding:20px 32px;display:flex;flex-direction:column;justify-content:center;gap:10px">
+<span style="font-size:13px;font-weight:500;letter-spacing:.18em;color:#66A5AD">NEXT UP · IN 1:12</span>
+<span style="font-size:22px;font-weight:300;letter-spacing:.01em;line-height:1.2">SPRINT · 3:00 <span style="color:#C4DFE6">110–120 RPM</span> <span style="color:#66A5AD">30–40</span></span>
+</div>
+<div style="flex:1.5;background:#003B46;border-radius:20px;padding:20px 32px;display:flex;align-items:center;gap:24px">
+<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+<span style="font-size:13px;font-weight:500;letter-spacing:.18em;color:#66A5AD">MUSIC · CLIMB</span>
+<span style="font-size:19px;font-weight:400;line-height:1.25">Now: Black Dog · Led Zeppelin</span>
+<span style="font-size:15px;font-weight:300;color:#66A5AD;line-height:1.25">Next: Whole Lotta Love · Led Zeppelin</span>
+</div>
+<button style="height:60px;padding:0 26px;border-radius:30px;border:0;background:#C4DFE6;color:#002A33;font-family:'Montserrat',sans-serif;font-size:16px;font-weight:500;letter-spacing:.02em;display:flex;align-items:center;gap:12px;cursor:pointer">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#002A33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+Open playlist
+</button>
+</div>
+</div>
+
+</div>
+</body>
+</html>
