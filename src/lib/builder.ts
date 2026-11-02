@@ -1,4 +1,5 @@
-import type { SegmentType, Target, Track, Workout } from "./types";
+import type { Pacing, Segment, SegmentType, Target, Track, Workout } from "./types";
+import { describeSteps, expandSegment } from "./pacing";
 import { parseWorkout } from "./validate";
 
 /** Editable form state. Numbers are strings so half-typed input is representable. */
@@ -13,6 +14,8 @@ export interface SegDraft {
   resMin: string;
   resMax: string;
   cue: string;
+  /** auto = sprints run 1:00 on / 1:00 off, climbs add resistance each minute. */
+  pacing: Pacing;
   /** Tracks live on their segment so reordering and deleting can never orphan them. */
   tracks: Omit<Track, "segmentIndex">[];
 }
@@ -51,7 +54,7 @@ export function newSegment(type: SegmentType, over: Partial<SegDraft> = {}): Seg
   return {
     key: uid(), name: d.name, type, min: String(d.min), sec: "0",
     cadMin: String(d.cad[0]), cadMax: String(d.cad[1]), resMin: String(d.res[0]), resMax: String(d.res[1]),
-    cue: d.cue, tracks: [], ...over,
+    cue: d.cue, pacing: "auto", tracks: [], ...over,
   };
 }
 
@@ -84,7 +87,7 @@ export function fromWorkout(w: Workout): WorkoutDraft {
       return {
         key: uid(), name: s.name, type: s.type,
         min: String(Math.floor(s.durationSec / 60)), sec: String(s.durationSec % 60),
-        cadMin, cadMax, resMin, resMax, cue: s.cue,
+        cadMin, cadMax, resMin, resMax, cue: s.cue, pacing: s.pacing ?? "auto",
         tracks: (w.tracklist ?? []).filter((t) => t.segmentIndex === i).map(({ segmentIndex: _i, ...t }) => t),
       };
     }),
@@ -123,6 +126,7 @@ export function toWorkout(d: WorkoutDraft, id = ""): Workout {
         cadence: range(s.cadMin, s.cadMax, "Cadence", 250),
         resistance: range(s.resMin, s.resMax, "Resistance", 100),
         cue: s.cue,
+        pacing: s.pacing,
       };
     } catch (e) {
       throw new Error(`${at}: ${(e as Error).message}`);
@@ -143,4 +147,19 @@ export function move<T>(arr: T[], from: number, to: number): T[] {
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
+}
+
+/** What a block turns into when ridden, e.g. "ON 1:00 · OFF 1:00 · ON 1:00". Empty if steady or unreadable. */
+export function previewSteps(s: SegDraft): string {
+  try {
+    const seg: Segment = {
+      name: s.name, type: s.type, cue: s.cue, pacing: s.pacing,
+      durationSec: (num(s.min, "Minutes", 360) ?? 0) * 60 + (num(s.sec, "Seconds", 59) ?? 0),
+      cadence: range(s.cadMin, s.cadMax, "Cadence", 250),
+      resistance: range(s.resMin, s.resMax, "Resistance", 100),
+    };
+    return seg.durationSec > 0 ? describeSteps(expandSegment(seg, 0, 0)) : "";
+  } catch {
+    return "";
+  }
 }

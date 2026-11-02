@@ -17,6 +17,16 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 
 `/builder/new` creates a ride, `/builder/<id>` edits a saved one, and `/builder/new?from=<id>` copies any ride (presets always open as a copy, since they are read-only). Add segments by type, use the Intervals box for work/rest pairs, reorder with the arrows, duplicate or delete a segment, and leave cadence or resistance blank for no target. Tracks attached by the music planner follow their segment when you reorder or duplicate. Saving needs Airtable to be configured.
 
+## Pacing inside a block
+
+A ride is stored as blocks, one per song. At ride time each block is split into minute-by-minute steps, so you never add them by hand (`src/lib/pacing.ts`):
+
+- **Sprint blocks:** 1:00 on, 1:00 off, repeating for the length of the block (a 3:00 sprint is on, off, on). The off minutes use recover targets, 70-80 RPM at 25-35 resistance. A 3:45 block ends with a 0:45 off.
+- **Climb blocks:** one step per minute, with resistance higher every minute by about 5 points. The resistance you set on the climb is its **peak**, so it never gets harder than that number. A long climb is capped at a 25 point total rise.
+- **Everything else:** one steady step. Blocks of about 1:30 or less stay a single step, so the HIIT preset is unchanged.
+
+On the ride screen the label shows the step ("CLIMB · SEGMENT 3 OF 7 · MIN 3 OF 5", "SPRINT … ON", "RECOVER … OFF"), the big countdown is the current step, and the timeline still shows blocks. The change warning is 10 seconds before a real change and 5 seconds between climb minutes. In the builder each sprint or climb block has a **Pacing** choice (Auto, Steady, 1:00 on/off, Ramp up) and shows what it will ride as. Skip and Previous move by block.
+
 ## Ride summary and history
 
 When a ride finishes, or you hold **End ride**, RideDeck records it to history right away (ride, start time, time ridden, segments completed, and a snapshot of the targets, so later edits to the ride don't change the past). The finish screen shows the time, segments and a chart of target cadence and resistance by segment, with segments you didn't reach faded.

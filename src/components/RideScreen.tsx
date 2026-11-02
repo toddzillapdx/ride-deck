@@ -1,11 +1,15 @@
 import type { Segment, Track, Workout } from "@/lib/types";
 import { fmtClock, fmtTarget, wasLine } from "@/lib/format";
 import { HandIcon, NoteIcon } from "./Icons";
+import type { Step } from "@/lib/pacing";
 
 export interface RideView {
   workout: Workout;
-  index: number;
-  segElapsed: number; // seconds into the current segment
+  index: number; // current block (segment)
+  segElapsed: number; // seconds into the current block
+  step: Step; // what to do right now (a minute of a sprint or climb, or a whole steady block)
+  prevStep?: Step;
+  nextStep?: Step;
   elapsed: number; // seconds into the ride
   total: number;
   tapIn: number; // seconds until next tap prompt
@@ -19,12 +23,10 @@ const TYPE_LABEL: Record<Segment["type"], string> = {
 
 /** Screen 1: ride, steady state. */
 export default function RideScreen({ v }: { v: RideView }) {
-  const { workout, index, segElapsed, elapsed, total, tapIn, now, next } = v;
+  const { workout, index, segElapsed, step, prevStep, nextStep, elapsed, total, tapIn, now, next } = v;
   const segs = workout.segments;
   const seg = segs[index];
-  const prev = segs[index - 1];
-  const nextSeg = segs[index + 1];
-  const segLeft = seg.durationSec - segElapsed;
+  const stepLeft = step.startSec + step.durationSec - elapsed;
   const playlist = workout.playlistUrl;
 
   return (
@@ -36,8 +38,8 @@ export default function RideScreen({ v }: { v: RideView }) {
           <span className="num text-[52px] font-light" style={{ letterSpacing: "-.01em" }}>{fmtClock(elapsed)}</span>
         </div>
         <div className="flex flex-col items-center gap-[6px]">
-          <span className="text-[14px] font-medium uppercase tracking-[.18em] text-ice">{TYPE_LABEL[seg.type]} · SEGMENT {index + 1} OF {segs.length}</span>
-          <span className="num text-[88px] font-extralight" style={{ letterSpacing: "-.02em" }}>{fmtClock(Math.ceil(segLeft))}</span>
+          <span className="text-[14px] font-medium uppercase tracking-[.18em] text-ice">{TYPE_LABEL[step.type]} · SEGMENT {index + 1} OF {segs.length}{step.tag ? ` · ${step.tag}` : ""}</span>
+          <span className="num text-[88px] font-extralight" style={{ letterSpacing: "-.02em" }}>{fmtClock(Math.ceil(stepLeft))}</span>
         </div>
         <div className="flex w-[280px] flex-col items-end gap-2">
           <span className="text-[13px] font-medium uppercase tracking-[.18em] text-mist">Remaining</span>
@@ -62,13 +64,13 @@ export default function RideScreen({ v }: { v: RideView }) {
 
       {/* targets */}
       <div className="flex min-h-0 flex-1 gap-6">
-        <Tile label="Cadence" unit="RPM" color="#C4DFE6" value={fmtTarget(seg.cadence)} foot={wasLine(prev?.cadence, seg.cadence, !prev)} />
-        <Tile label="Resistance" unit="0–100" color="#66A5AD" value={fmtTarget(seg.resistance)} foot={wasLine(prev?.resistance, seg.resistance, !prev)} />
+        <Tile label="Cadence" unit="RPM" color="#C4DFE6" value={fmtTarget(step.cadence)} foot={wasLine(prevStep?.cadence, step.cadence, !prevStep)} />
+        <Tile label="Resistance" unit="0–100" color="#66A5AD" value={fmtTarget(step.resistance)} foot={wasLine(prevStep?.resistance, step.resistance, !prevStep)} />
       </div>
 
       {/* cue row */}
       <div className="flex h-11 items-center justify-between">
-        <span className="text-[24px] font-light" style={{ letterSpacing: ".005em" }}>{seg.cue}</span>
+        <span className="text-[24px] font-light" style={{ letterSpacing: ".005em" }}>{step.cue}</span>
         <span className="flex items-center gap-[10px] rounded-[22px] border-2 border-line px-[18px] py-[9px] text-[14px] font-normal tracking-[.04em] text-mist">
           <HandIcon color="#66A5AD" />
           Screen tap in {fmtClock(tapIn)}
@@ -79,14 +81,14 @@ export default function RideScreen({ v }: { v: RideView }) {
       <div className="flex h-32 gap-6">
         <div className="flex flex-[1.3] flex-col justify-center gap-[10px] rounded-[20px] bg-tile px-8 py-5">
           <span className="text-[13px] font-medium uppercase tracking-[.18em] text-mist">
-            {nextSeg ? `Next up · in ${fmtClock(Math.ceil(segLeft))}` : "Last segment"}
+            {nextStep ? `Next up · in ${fmtClock(Math.ceil(stepLeft))}` : "Last segment"}
           </span>
           <span className="text-[22px] font-light leading-[1.2]" style={{ letterSpacing: ".01em" }}>
-            {nextSeg ? (
+            {nextStep ? (
               <>
-                {nextSeg.name.toUpperCase()} · {fmtClock(nextSeg.durationSec)}{" "}
-                <span className="text-ice">{fmtTarget(nextSeg.cadence)} RPM</span>{" "}
-                <span className="text-mist">{fmtTarget(nextSeg.resistance)}</span>
+                {nextStep.name.toUpperCase()} · {fmtClock(nextStep.durationSec)}{" "}
+                <span className="text-ice">{fmtTarget(nextStep.cadence)} RPM</span>{" "}
+                <span className="text-mist">{fmtTarget(nextStep.resistance)}</span>
               </>
             ) : (
               "Finish strong"
@@ -102,7 +104,7 @@ export default function RideScreen({ v }: { v: RideView }) {
           <a
             href={playlist || undefined}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             aria-disabled={!playlist}
             className="flex h-[60px] items-center gap-3 rounded-[30px] bg-ice px-[26px] text-[16px] font-medium text-ground"
             style={{ letterSpacing: ".02em", opacity: playlist ? 1 : 0.4, pointerEvents: playlist ? "auto" : "none" }}

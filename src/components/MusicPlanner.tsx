@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import Stage from "./Stage";
 import { PRESETS, isPresetId, totalSeconds } from "@/lib/presets";
 import { fmtClock } from "@/lib/format";
+import { extractUrl, isHttpUrl, pasteLink } from "@/lib/url";
 import {
   GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, toCsv, toPlaylistPrompt, toText,
 } from "@/lib/music";
@@ -115,7 +116,8 @@ export default function MusicPlanner() {
 
   async function save() {
     setSaving(true); setMsg(null);
-    const body = { ...workout, genre, vibe, playlistUrl: playlistUrl.trim() || undefined, tracklist: tracks.map(strip) };
+    const link = extractUrl(playlistUrl) || playlistUrl.trim();
+    const body = { ...workout, genre, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
     const preset = isPresetId(workout.id);
     try {
       const res = await fetch(preset ? "/api/rides" : `/api/rides/${workout.id}`, { method: preset ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -183,8 +185,14 @@ export default function MusicPlanner() {
           </div>
 
           <div className="flex items-center gap-3">
-            <input value={playlistUrl} onChange={(e) => setPlaylistUrl(e.target.value)} placeholder="Playlist link from Amazon Music (paste after you build it)" inputMode="url"
+            <input value={playlistUrl} onChange={(e) => setPlaylistUrl(e.target.value)} onPaste={(e) => pasteLink(e, setPlaylistUrl)}
+              onBlur={() => setPlaylistUrl((v) => extractUrl(v) || v.trim())}
+              placeholder="Playlist link from Amazon Music (paste the reply or just the link)" inputMode="url"
               className="h-11 min-w-0 flex-1 rounded-[12px] border-2 border-line bg-tile px-3 text-[14px] text-ink outline-none focus:border-ice" />
+            {isHttpUrl(extractUrl(playlistUrl) || playlistUrl.trim()) && (
+              <a href={extractUrl(playlistUrl) || playlistUrl.trim()} target="_blank" rel="noopener noreferrer"
+                className="flex h-11 flex-none items-center rounded-full bg-ice px-5 text-[14px] font-medium text-ground">Open playlist ↗</a>
+            )}
             {needPass && (
               <input value={pass} onChange={(e) => { setPass(e.target.value); store.set(e.target.value); }} placeholder="Passcode" type="password"
                 className="h-11 w-[150px] rounded-[12px] border-2 border-ice bg-tile px-3 text-[14px] text-ink outline-none" />

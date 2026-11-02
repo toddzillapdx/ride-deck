@@ -2,11 +2,12 @@
 import { useMemo, useState } from "react";
 import Stage from "./Stage";
 import { fmtClock } from "@/lib/format";
+import { extractUrl, pasteLink } from "@/lib/url";
 import {
-  TYPE_OPTIONS, draftSeconds, intervals, move, newSegment, toWorkout, uid,
+  TYPE_OPTIONS, draftSeconds, intervals, move, newSegment, previewSteps, toWorkout, uid,
   type SegDraft, type WorkoutDraft,
 } from "@/lib/builder";
-import type { SegmentType } from "@/lib/types";
+import type { Pacing, SegmentType } from "@/lib/types";
 
 export type BuilderMode = { kind: "new" } | { kind: "edit"; id: string };
 
@@ -79,7 +80,7 @@ export default function Builder({ initial, mode }: { initial: WorkoutDraft; mode
             <Labeled text="Genre"><input className={`${field} w-full`} value={d.genre} onChange={(e) => set({ genre: e.target.value })} placeholder="Rock" /></Labeled>
             <Labeled text="Vibe"><input className={`${field} w-full`} value={d.vibe} onChange={(e) => set({ vibe: e.target.value })} placeholder="Classic" /></Labeled>
           </div>
-          <Labeled text="Playlist link"><input className={field} value={d.playlistUrl} onChange={(e) => set({ playlistUrl: e.target.value })} placeholder="https://music.amazon.com/…" inputMode="url" /></Labeled>
+          <Labeled text="Playlist link"><input className={field} value={d.playlistUrl} onChange={(e) => set({ playlistUrl: e.target.value })} onPaste={(e) => pasteLink(e, (v) => set({ playlistUrl: v }))} onBlur={() => set({ playlistUrl: extractUrl(d.playlistUrl) || d.playlistUrl.trim() })} placeholder="https://music.amazon.com/…" inputMode="url" /></Labeled>
 
           <div className="flex flex-col gap-2">
             <span className={label}>Add segment</span>
@@ -164,6 +165,7 @@ function SegmentCard({ s, i, count, on, up, down, dup, del }: {
   s: SegDraft; i: number; count: number; on: (p: Partial<SegDraft>) => void;
   up: () => void; down: () => void; dup: () => void; del: () => void;
 }) {
+  const preview = previewSteps(s);
   return (
     <div className="flex flex-col gap-3 rounded-[18px] border-2 border-line bg-tile p-4">
       <div className="flex items-center gap-3">
@@ -189,6 +191,19 @@ function SegmentCard({ s, i, count, on, up, down, dup, del }: {
         <Num v={s.resMin} on={(v) => on({ resMin: v })} w={56} ph="min" /><span className="text-mist">–</span><Num v={s.resMax} on={(v) => on({ resMax: v })} w={56} ph="max" />
         <input className={`${field} min-w-0 flex-1`} value={s.cue} onChange={(e) => on({ cue: e.target.value })} placeholder="Cue shown during the segment" aria-label="Cue" />
       </div>
+      {(s.type === "sprint" || s.type === "climb" || s.pacing !== "auto") && (
+        <div className="flex items-center gap-3 pl-9">
+          <span className="text-[12px] font-medium uppercase tracking-[.16em] text-mist">Pacing</span>
+          <select className={`${field} w-[196px] px-2 text-[14px]`} value={s.pacing} onChange={(e) => on({ pacing: e.target.value as Pacing })} aria-label="Pacing"
+            title="Auto: sprints run 1:00 on / 1:00 off and climbs add resistance every minute. The resistance you set on a climb is its peak.">
+            <option value="auto">Auto ({s.type === "climb" ? "ramp" : s.type === "sprint" ? "1:00 on/off" : "steady"})</option>
+            <option value="steady">Steady</option>
+            <option value="intervals">1:00 on / 1:00 off</option>
+            <option value="ramp">Ramp up each minute</option>
+          </select>
+          {preview && <span className="min-w-0 truncate text-[13px] font-light text-mist">{preview}</span>}
+        </div>
+      )}
     </div>
   );
 }

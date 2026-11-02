@@ -1,4 +1,9 @@
 export type SegmentType = "warmup" | "flat" | "climb" | "sprint" | "recover" | "cooldown";
+/**
+ * How a block is ridden. `auto` (the default) means sprints run 1:00 on / 1:00 off and climbs add
+ * resistance every minute; everything else is steady. See lib/pacing.ts.
+ */
+export type Pacing = "auto" | "steady" | "intervals" | "ramp";
 /** A target is a [min, max] range or a single number. */
 export type Target = [number, number] | number;
 
@@ -10,6 +15,7 @@ export interface Segment {
   cadence?: Target;
   resistance?: Target;
   cue: string;
+  pacing?: Pacing;
 }
 
 export interface Track {

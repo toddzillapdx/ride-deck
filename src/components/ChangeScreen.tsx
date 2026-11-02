@@ -1,11 +1,12 @@
-import type { Segment, Target } from "@/lib/types";
+import type { Target } from "@/lib/types";
+import type { Step } from "@/lib/pacing";
 import { direction, fmtClock, fmtTarget } from "@/lib/format";
 
 interface Props {
   index: number;
   count: number;
-  seg: Segment;
-  next: Segment;
+  seg: Step; // the step that is ending
+  next: Step; // the step starting next
   secondsLeft: number;
   elapsed: number;
   total: number;
@@ -20,7 +21,7 @@ export default function ChangeScreen({ index, count, seg, next, secondsLeft, ela
     <div className="flex h-full w-full flex-col gap-6 bg-ice text-ground" style={{ padding: "36px 56px 40px", boxSizing: "border-box" }}>
       <div className="flex items-center justify-between text-[14px] font-medium uppercase tracking-[.18em]">
         <span>Elapsed {fmtClock(elapsed)} · Remaining {fmtClock(Math.ceil(total - elapsed))}</span>
-        <span>Segment {index + 1} of {count}</span>
+        <span>Segment {index + 1} of {count}{seg.tag ? ` · ${seg.tag}` : ""}</span>
       </div>
 
       <div className="flex flex-1 items-center justify-center" style={{ gap: 72 }}>
@@ -31,7 +32,7 @@ export default function ChangeScreen({ index, count, seg, next, secondsLeft, ela
         <div className="flex flex-col gap-[6px]">
           <span className="text-[16px] font-medium uppercase tracking-[.24em]">Next</span>
           <span className="text-[150px] font-extralight uppercase leading-none" style={{ letterSpacing: "-.02em" }}>{next.name}</span>
-          <span className="text-[22px] font-normal" style={{ letterSpacing: ".01em" }}>{fmtClock(next.durationSec)} · {next.cue}</span>
+          <span className="text-[22px] font-normal" style={{ letterSpacing: ".01em" }}>{fmtClock(next.durationSec)}{next.tag ? ` · ${next.tag}` : ""} · {next.cue}</span>
         </div>
       </div>
 

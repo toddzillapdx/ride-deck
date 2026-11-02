@@ -56,8 +56,8 @@ You are given the segments of one ride (type, length, target cadence in RPM, tar
 Pacing:
 - warmup, recover and cooldown segments want slower, steadier songs.
 - flat segments want a steady mid-tempo groove.
-- climb segments are heavy and slow: pick songs with a heavy, deliberate, plodding feel. Tempos near the target cadence, or double it, work well.
-- sprint segments want the fastest, most explosive songs.
+- climb segments are heavy and slow and add resistance every minute: pick songs with a heavy, deliberate, driving feel. Tempos near the target cadence, or double it, work well.
+- sprint segments want the fastest, most explosive songs. They are ridden as one minute hard and one minute easy for the whole song, so a clear, steady beat that is easy to count in minutes works best.
 - Songs should roughly fill the time needed for each segment. A song may be 3 to 5 minutes. Use one song for a segment of 3 to 6 minutes and more for longer ones.
 - Segments under about 2 minutes do not need their own song. Return no tracks for them when the previous song can carry through.
 

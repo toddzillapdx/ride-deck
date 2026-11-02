@@ -4,13 +4,14 @@ import type { Workout } from "@/lib/types";
 import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
 import { trackAt } from "@/lib/music";
+import { expand, stepIndexAt } from "@/lib/pacing";
 import Stage from "./Stage";
 import RideScreen, { type RideView } from "./RideScreen";
 import ChangeScreen from "./ChangeScreen";
 import TapBanner from "./TapBanner";
 import FinishScreen from "./FinishScreen";
+import { NoteIcon } from "./Icons";
 
-const WARN_SEC = 10; // change screen window
 const TAP_EVERY = 600; // tap prompt cadence (seconds of ride time)
 
 type Phase = "ready" | "riding" | "done";
@@ -22,6 +23,8 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
     let t = 0;
     return segs.map((s) => ((t += s.durationSec), t - s.durationSec));
   }, [segs]);
+  // Sprint and climb blocks become minute-by-minute steps (see lib/pacing.ts). The ride is still stored as blocks.
+  const steps = useMemo(() => expand(workout), [workout]);
 
   // ?speed=10 runs the clock 10x for testing the warning and tap screens.
   const [speed, setSpeed] = useState(1);
@@ -38,9 +41,11 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
   const [runId, setRunId] = useState(0); // new id per ride, so each finish records once
 
   const elapsed = Math.min(total, clock.elapsedMs / 1000);
-  const index = Math.max(0, segs.findIndex((_, i) => elapsed < starts[i] + segs[i].durationSec));
+  const stepIdx = stepIndexAt(steps, elapsed);
+  const step = steps[stepIdx];
+  const index = step.segIndex; // current block
   const segElapsed = elapsed - starts[index];
-  const segLeft = segs[index].durationSec - segElapsed;
+  const stepLeft = step.startSec + step.durationSec - elapsed;
 
   // Finish when the clock reaches the end.
   useEffect(() => {
@@ -108,16 +113,19 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
   }, [menu]);
 
   const { now, next } = trackAt(workout, elapsed);
-  const view: RideView = { workout, index, segElapsed, elapsed, total, tapIn: Math.max(0, nextPrompt - elapsed), now, next };
+  const view: RideView = {
+    workout, index, segElapsed, step, prevStep: steps[stepIdx - 1], nextStep: steps[stepIdx + 1],
+    elapsed, total, tapIn: Math.max(0, nextPrompt - elapsed), now, next,
+  };
 
-  const warning = phase === "riding" && index < segs.length - 1 && segLeft <= WARN_SEC;
+  const warning = phase === "riding" && stepIdx < steps.length - 1 && stepLeft <= step.warnSec;
   const showTap = phase === "riding" && !warning && elapsed >= nextPrompt;
 
   return (
     <div onPointerDown={onAnyTap}>
       <Stage bg={warning ? "#C4DFE6" : "#002A33"}>
         {warning ? (
-          <ChangeScreen index={index} count={segs.length} seg={segs[index]} next={segs[index + 1]} secondsLeft={segLeft} elapsed={elapsed} total={total} />
+          <ChangeScreen index={index} count={segs.length} seg={step} next={steps[stepIdx + 1]} secondsLeft={stepLeft} elapsed={elapsed} total={total} />
         ) : (
           <>
             <div style={{ opacity: showTap ? 0.4 : 1, height: "100%" }}>
@@ -131,6 +139,12 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
           <Overlay>
             <div className="text-[13px] font-medium uppercase tracking-[.2em] text-mist">{workout.name}</div>
             <div className="text-[34px] font-light">{fmtClock(total)} · {segs.length} segments</div>
+            {workout.playlistUrl && (
+              <a href={workout.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[60px] items-center gap-3 rounded-full border-2 border-line px-8 text-[16px] font-medium text-ice">
+                <NoteIcon color="#C4DFE6" />
+                Open playlist
+              </a>
+            )}
             <BigButton onClick={startRide}>Start ride</BigButton>
             <a href="/" className="text-[16px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
             {speed !== 1 && <div className="text-[14px] text-mist">Test mode: {speed}x clock</div>}

@@ -1,6 +1,7 @@
-import type { Segment, SegmentType, Target, Track, Workout } from "./types";
+import type { Pacing, Segment, SegmentType, Target, Track, Workout } from "./types";
 
 const TYPES: SegmentType[] = ["warmup", "flat", "climb", "sprint", "recover", "cooldown"];
+const PACINGS: Pacing[] = ["auto", "steady", "intervals", "ramp"];
 
 const isNum = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
 
@@ -25,6 +26,7 @@ export function parseWorkout(input: unknown): Workout {
     if (typeof s.name !== "string" || !s.name.trim()) throw new Error(`${at} needs a name`);
     if (!TYPES.includes(s.type as SegmentType)) throw new Error(`${at} type must be one of ${TYPES.join(", ")}`);
     if (!isNum(s.durationSec) || s.durationSec < 1 || s.durationSec > 6 * 3600) throw new Error(`${at} durationSec must be 1 to 21600`);
+    if (s.pacing !== undefined && s.pacing !== null && !PACINGS.includes(s.pacing as Pacing)) throw new Error(`${at} pacing must be one of ${PACINGS.join(", ")}`);
     return {
       name: s.name.trim(),
       type: s.type as SegmentType,
@@ -32,6 +34,8 @@ export function parseWorkout(input: unknown): Workout {
       cadence: target(s.cadence, `${at} cadence`),
       resistance: target(s.resistance, `${at} resistance`),
       cue: typeof s.cue === "string" ? s.cue : "",
+      // "auto" is the default, so it is stored as absent.
+      ...(s.pacing && s.pacing !== "auto" ? { pacing: s.pacing as Pacing } : {}),
     };
   });
 

@@ -100,6 +100,7 @@ function Card({ w, onExport, onDelete }: { w: Workout; onExport: () => void; onD
           {onDelete && !isPresetId(w.id) && <a href={`/builder/${w.id}`} className="underline underline-offset-4">Edit</a>}
           <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate</a>
           <a href={`/music?ride=${w.id}`} className="underline underline-offset-4">Music</a>
+          {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="text-ice underline underline-offset-4">Playlist ↗</a>}
           <button onClick={onExport} className="underline underline-offset-4">Export</button>
           {onDelete && !isPresetId(w.id) && <button onClick={onDelete} className="underline underline-offset-4">Delete</button>}
         </span>
