@@ -14,23 +14,35 @@ interface Props {
   /** Segments before this index were ridden; the rest are shown faded. Omit to show all. */
   reached?: number;
   panelHeight?: number;
+  /** Phone: labels sit above each panel instead of in a side column. */
+  compact?: boolean;
 }
 
 const range = (t: Target | undefined): [number, number] | null => (t === undefined ? null : Array.isArray(t) ? t : [t, t]);
 
-function Panel({ title, unit, color, segs, pick, max, reached, height, active, setActive }: {
-  title: string; unit: string; color: string; segs: SegSnapshot[]; pick: (s: SegSnapshot) => Target | undefined;
+function Panel({ title, unit, color, segs, pick, max, reached, height, active, setActive, compact }: {
+  compact?: boolean; title: string; unit: string; color: string; segs: SegSnapshot[]; pick: (s: SegSnapshot) => Target | undefined;
   max: number; reached: number; height: number; active: number | null; setActive: (i: number | null) => void;
 }) {
   return (
-    <div className="flex gap-3">
-      <div className="flex w-[148px] flex-none flex-col justify-between py-[2px]" style={{ height }}>
-        <span className="flex items-center gap-2 text-[13px] font-medium uppercase tracking-[.16em] text-mist">
-          <span aria-hidden className="inline-block h-[10px] w-[10px] rounded-[3px]" style={{ background: color }} />
-          {title}
-        </span>
-        <span className="text-[13px] font-light text-mist">{max} {unit} max</span>
-      </div>
+    <div className={compact ? "flex flex-col gap-1" : "flex gap-3"}>
+      {compact ? (
+        <div className="flex items-baseline justify-between">
+          <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[.14em] text-mist">
+            <span aria-hidden className="inline-block h-[9px] w-[9px] rounded-[3px]" style={{ background: color }} />
+            {title}
+          </span>
+          <span className="text-[11px] font-light text-mist">{max} {unit} max</span>
+        </div>
+      ) : (
+        <div className="flex w-[148px] flex-none flex-col justify-between py-[2px]" style={{ height }}>
+          <span className="flex items-center gap-2 text-[13px] font-medium uppercase tracking-[.16em] text-mist">
+            <span aria-hidden className="inline-block h-[10px] w-[10px] rounded-[3px]" style={{ background: color }} />
+            {title}
+          </span>
+          <span className="text-[13px] font-light text-mist">{max} {unit} max</span>
+        </div>
+      )}
       <div className="relative flex min-w-0 flex-1 gap-[2px]" style={{ height }}>
         <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0" style={{ height: 1, background: "#07575B" }} />
         <div aria-hidden className="pointer-events-none absolute inset-x-0" style={{ top: "50%", height: 1, background: "#07575B", opacity: 0.5 }} />
@@ -70,7 +82,7 @@ function Panel({ title, unit, color, segs, pick, max, reached, height, active, s
   );
 }
 
-export default function TargetsChart({ segments, reached, panelHeight = 88 }: Props) {
+export default function TargetsChart({ segments, reached, panelHeight = 88, compact }: Props) {
   const [active, setActive] = useState<number | null>(null);
   const total = segments.reduce((n, s) => n + s.durationSec, 0);
   const done = reached ?? segments.length;
@@ -80,7 +92,7 @@ export default function TargetsChart({ segments, reached, panelHeight = 88 }: Pr
 
   return (
     <figure className="m-0 flex flex-col gap-2" aria-label="Target cadence and resistance by segment">
-      <div className="h-[22px] text-[14px] font-normal text-ink" aria-live="polite">
+      <div className={compact ? "min-h-[18px] text-[12px] font-normal text-ink" : "h-[22px] text-[14px] font-normal text-ink"} aria-live="polite">
         {a ? (
           <>
             {a.name} · {fmtClock(a.durationSec)} · <span className="text-mist">Cadence</span> {fmtTarget(a.cadence)} · <span className="text-mist">Resistance</span> {fmtTarget(a.resistance)}
@@ -90,10 +102,10 @@ export default function TargetsChart({ segments, reached, panelHeight = 88 }: Pr
           <span className="text-mist">Tap a segment to see its targets</span>
         )}
       </div>
-      <Panel title="Cadence" unit="RPM" color="#C4DFE6" segs={segments} pick={(s) => s.cadence} max={cadMax} reached={done} height={panelHeight} active={active} setActive={setActive} />
-      <Panel title="Resistance" unit="" color="#66A5AD" segs={segments} pick={(s) => s.resistance} max={100} reached={done} height={panelHeight} active={active} setActive={setActive} />
+      <Panel compact={compact} title="Cadence" unit="RPM" color="#C4DFE6" segs={segments} pick={(s) => s.cadence} max={cadMax} reached={done} height={panelHeight} active={active} setActive={setActive} />
+      <Panel compact={compact} title="Resistance" unit="" color="#66A5AD" segs={segments} pick={(s) => s.resistance} max={100} reached={done} height={panelHeight} active={active} setActive={setActive} />
       <div className="flex gap-3">
-        <div className="w-[148px] flex-none" />
+        {!compact && <div className="w-[148px] flex-none" />}
         <div className="flex flex-1 justify-between text-[13px] font-light text-mist">
           <span>0:00</span><span>{fmtClock(total / 2)}</span><span>{fmtClock(total)}</span>
         </div>

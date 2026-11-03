@@ -1,6 +1,7 @@
 import type { Segment, Track, Workout } from "@/lib/types";
 import { fmtClock, fmtTarget, wasLine } from "@/lib/format";
 import { HandIcon, NoteIcon } from "./Icons";
+import { PauseIcon } from "./RideControls";
 import type { Step } from "@/lib/pacing";
 
 export interface RideView {
@@ -15,6 +16,7 @@ export interface RideView {
   tapIn: number; // seconds until next tap prompt
   now?: Track;
   next?: Track;
+  onPause?: () => void;
 }
 
 const TYPE_LABEL: Record<Segment["type"], string> = {
@@ -23,7 +25,7 @@ const TYPE_LABEL: Record<Segment["type"], string> = {
 
 /** Screen 1: ride, steady state. */
 export default function RideScreen({ v }: { v: RideView }) {
-  const { workout, index, segElapsed, step, prevStep, nextStep, elapsed, total, tapIn, now, next } = v;
+  const { workout, index, segElapsed, step, prevStep, nextStep, elapsed, total, tapIn, now, next, onPause } = v;
   const segs = workout.segments;
   const seg = segs[index];
   const stepLeft = step.startSec + step.durationSec - elapsed;
@@ -71,10 +73,17 @@ export default function RideScreen({ v }: { v: RideView }) {
       {/* cue row */}
       <div className="flex h-11 items-center justify-between">
         <span className="text-[24px] font-light" style={{ letterSpacing: ".005em" }}>{step.cue}</span>
-        <span className="flex items-center gap-[10px] rounded-[22px] border-2 border-line px-[18px] py-[9px] text-[14px] font-normal tracking-[.04em] text-mist">
-          <HandIcon color="#66A5AD" />
-          Screen tap in {fmtClock(tapIn)}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-[10px] rounded-[22px] border-2 border-line px-[18px] py-[9px] text-[14px] font-normal tracking-[.04em] text-mist">
+            <HandIcon color="#66A5AD" />
+            Screen tap in {fmtClock(tapIn)}
+          </span>
+          {onPause && (
+            <button onClick={onPause} aria-label="Pause ride" className="flex h-11 items-center gap-2 rounded-full bg-ice px-6 text-[14px] font-medium uppercase tracking-[.08em] text-ground">
+              <PauseIcon size={16} color="#002A33" />Pause
+            </button>
+          )}
+        </div>
       </div>
 
       {/* bottom cards */}

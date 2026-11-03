@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Stage from "./Stage";
+import PhoneShell from "./PhoneShell";
+import { useLayout } from "@/lib/useLayout";
 import TargetsChart from "./TargetsChart";
 import KcalField from "./KcalField";
 import { PRESETS } from "@/lib/presets";
@@ -53,6 +55,67 @@ export default function HistoryView() {
     const res = await fetch(`/api/history/${log.id}`, { method: "DELETE" });
     if (!res.ok) return window.alert((await res.json().catch(() => ({}))).error ?? "Delete failed");
     setLogs((ls) => { const next = ls.filter((l) => l.id !== log.id); setSelected(next[0]?.id ?? null); return next; });
+  }
+
+  const layout = useLayout();
+  if (layout === null) return <div className="fixed inset-0" style={{ background: "#002A33" }} />;
+  if (layout.phone) {
+    return (
+      <PhoneShell>
+        <div className="flex items-end justify-between gap-3 pb-3">
+          <div className="flex flex-col gap-1">
+            <a href="/" className="flex h-[32px] items-center text-[12px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
+            <span className="text-[26px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>History</span>
+          </div>
+          {status === "ok" && (
+            <div className="flex gap-4">
+              <Total label="Rides" value={String(t.rides)} />
+              <Total label="Time" value={hours(t.seconds)} />
+              <Total label="Kcal" value={t.kcal.toLocaleString()} />
+            </div>
+          )}
+        </div>
+        {status !== "ok" ? (
+          <div className="rounded-[16px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">
+            {status === "loading" ? "Loading…" : status === "off" ? "History needs Airtable. Set AIRTABLE_TOKEN and AIRTABLE_BASE_ID in Vercel." : `Couldn't load history${detail ? `: ${detail.slice(0, 120)}` : ""}`}
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="rounded-[16px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">No rides yet. Finish a ride and it shows up here.</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {logs.map((l) => {
+              const open = l.id === selected;
+              return (
+                <div key={l.id} className={`rounded-[16px] border-2 bg-tile ${open ? "border-ice" : "border-line"}`}>
+                  <button onClick={() => setSelected(open ? null : l.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="truncate text-[16px] font-normal">{l.rideName}</span>
+                      <span className="text-[12px] font-light text-mist">{when(l.startedAt)} · {fmtClock(l.elapsedSec)}{l.segmentsCompleted < l.segmentsTotal ? " · ended early" : ""}</span>
+                    </div>
+                    <div className="flex flex-none flex-col items-end">
+                      <span className="num text-[24px] font-light">{l.kcal ?? "—"}</span>
+                      <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">kcal</span>
+                    </div>
+                  </button>
+                  {open && (
+                    <div className="flex flex-col gap-3 border-t-2 border-line px-4 py-3">
+                      <KcalField key={l.id} value={l.kcal} save={(k) => saveKcal(l, k)} />
+                      <TargetsChart segments={l.segments} reached={l.segmentsCompleted} panelHeight={52} compact />
+                      <div className="flex gap-2">
+                        {rideExists(l.rideId)
+                          ? <a href={`/ride/${l.rideId}`} className="flex h-[48px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">Ride again</a>
+                          : <span className="flex h-[48px] items-center text-[12px] text-mist">Original ride was deleted</span>}
+                        <button onClick={() => remove(l)} className="ml-auto h-[48px] rounded-full border-2 border-line px-5 text-[13px] text-mist">Delete</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </PhoneShell>
+    );
   }
 
   return (

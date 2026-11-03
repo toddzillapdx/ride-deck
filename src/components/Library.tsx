@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Stage from "./Stage";
+import PhoneShell from "./PhoneShell";
+import { useLayout } from "@/lib/useLayout";
 import { PRESETS, isPresetId, totalSeconds } from "@/lib/presets";
 import { fmtClock } from "@/lib/format";
 import { parseWorkout } from "@/lib/validate";
@@ -39,6 +41,56 @@ export default function Library() {
     if (res.ok) setSaved((s) => s.filter((x) => x.id !== w.id));
     else window.alert((await res.json().catch(() => ({}))).error ?? "Delete failed");
   };
+
+  const layout = useLayout();
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    try {
+      const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+      setHint(!standalone && localStorage.getItem("ridedeck-hint-dismissed") !== "1");
+    } catch { /* ignore */ }
+  }, []);
+
+  if (layout === null) return <div className="fixed inset-0" style={{ background: "#002A33" }} />;
+  if (layout.phone) {
+    const all = [...saved.map((w) => ({ w, mine: true })), ...PRESETS.map((w) => ({ w, mine: false }))];
+    return (
+      <PhoneShell>
+        <div className="flex items-end justify-between gap-3 pb-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-[28px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
+            <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">{status === "ok" ? "Airtable connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Airtable error"}</span>
+          </div>
+          <a href="/history" className="flex h-[48px] items-center rounded-full border-2 border-line px-5 text-[14px] text-ink">History</a>
+        </div>
+        <div className={`grid gap-3 ${layout.landscape ? "grid-cols-2" : "grid-cols-1"}`}>
+          {all.map(({ w, mine }) => {
+            const climbs = w.segments.filter((x) => x.type === "climb").length;
+            const sprints = w.segments.filter((x) => x.type === "sprint").length;
+            return (
+              <div key={w.id} className="flex items-center gap-3 rounded-[18px] border-2 border-line bg-tile px-4 py-3">
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="truncate text-[17px] font-normal">{w.name}</span>
+                  <span className="text-[12px] font-light leading-snug text-mist">
+                    {mine ? "Mine · " : ""}{fmtClock(totalSeconds(w))} · {w.segments.length} segment{w.segments.length === 1 ? "" : "s"}{climbs ? ` · ${climbs} climb${climbs > 1 ? "s" : ""}` : ""}{sprints ? ` · ${sprints} sprint${sprints > 1 ? "s" : ""}` : ""}
+                  </span>
+                  {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[32px] items-center text-[12px] text-ice underline underline-offset-4">Playlist ↗</a>}
+                </div>
+                <a href={`/ride/${w.id}`} className="flex h-[52px] flex-none items-center rounded-full bg-ice px-7 text-[16px] font-medium text-ground">Start</a>
+              </div>
+            );
+          })}
+        </div>
+        {hint && (
+          <div className="mt-4 flex items-start justify-between gap-3 rounded-[14px] border-2 border-line px-4 py-3 text-[12px] font-light text-mist">
+            <span>Tip: tap Share, then Add to Home Screen, to open RideDeck full screen without the browser bar.</span>
+            <button className="flex-none text-ice underline underline-offset-4" onClick={() => { try { localStorage.setItem("ridedeck-hint-dismissed", "1"); } catch { /* ignore */ } setHint(false); }}>Got it</button>
+          </div>
+        )}
+        <p className="pt-4 text-center text-[11px] font-light text-mist">Build rides and plan music on a computer.</p>
+      </PhoneShell>
+    );
+  }
 
   const statusText = { loading: "Loading saved rides…", ok: "Airtable connected", off: "Airtable not configured · presets only", error: `Airtable error${detail ? `: ${detail.slice(0, 80)}` : ""}` }[status];
 

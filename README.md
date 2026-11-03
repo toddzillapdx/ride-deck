@@ -17,6 +17,14 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 
 `/builder/new` creates a ride, `/builder/<id>` edits a saved one, and `/builder/new?from=<id>` copies any ride (presets always open as a copy, since they are read-only). Add segments by type, use the Intervals box for work/rest pairs, reorder with the arrows, duplicate or delete a segment, and leave cadence or resistance blank for no target. Tracks attached by the music planner follow their segment when you reorder or duplicate. Saving needs Airtable to be configured.
 
+## On a phone
+
+Phones (short side under 600 px) get their own layout instead of the scaled tablet canvas: the library, the whole ride (start screen, ride, change warning, tap prompt, pause, finish) and history, in landscape and portrait. Target numbers are sized to fill their tile, buttons are thumb-sized, and the layout pads for notches and the home indicator. Tablets and desktops keep the 1280x800 canvas. Building rides and planning music stay on the canvas layout, which is meant for a computer.
+
+- **Pause:** a **Pause** button is always on the ride screen (phone and tablet). Pausing stops the clock and shows a full-screen **Paused** screen with a big **Resume** and **Hold to end ride**. Your music app is separate, so pause it there too.
+- **Full screen:** on iPhone open the site in Safari, tap Share, then **Add to Home Screen**. On Android Chrome use the menu, then **Install app** or **Add to Home screen**. It then opens without the browser bar (`manifest.ts`, `public/icons`).
+- **Switching to the music app:** the ride clock uses the wall clock and the ride in progress is saved on the device, so if the phone suspends or reloads the page while you are in the music app, reopening the same ride picks up where it is (time spent away counts as riding, and a paused ride stays paused). Ending the ride or finishing it clears the saved state.
+
 ## Pacing inside a block
 
 A ride is stored as blocks, one per song. At ride time each block is split into minute-by-minute steps, so you never add them by hand (`src/lib/pacing.ts`):

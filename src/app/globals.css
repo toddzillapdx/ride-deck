@@ -9,3 +9,13 @@ body { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 
 .tap-pulse { animation: tap-pulse 1s ease-in-out infinite; }
 
 input, textarea, select { user-select: text; font-family: inherit; }
+
+html, body { overscroll-behavior: none; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+
+/* Phone layout: the target numbers size themselves to their tile (container query units),
+   capped by screen height, so "110–120" and "60–70" both fill the tile without overflowing. */
+.phone-tile { container-type: inline-size; }
+.phone-num {
+  line-height: 1; letter-spacing: -0.03em; font-weight: 300; font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-size: min(var(--cap, 30dvh), calc(148cqw / var(--chars, 6)));
+}

@@ -5,18 +5,25 @@ import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
 import { trackAt } from "@/lib/music";
 import { expand, stepIndexAt } from "@/lib/pacing";
+import { useLayout } from "@/lib/useLayout";
 import Stage from "./Stage";
 import RideScreen, { type RideView } from "./RideScreen";
 import ChangeScreen from "./ChangeScreen";
 import TapBanner from "./TapBanner";
 import FinishScreen from "./FinishScreen";
+import PhoneRide from "./PhoneRide";
+import PauseOverlay from "./PauseOverlay";
+import { BigButton, CtlButton, HoldButton } from "./RideControls";
 import { NoteIcon } from "./Icons";
 
 const TAP_EVERY = 600; // tap prompt cadence (seconds of ride time)
+const STORE_KEY = "ridedeck-active-ride";
+const STALE_MS = 6 * 3600 * 1000;
 
 type Phase = "ready" | "riding" | "done";
 
 export default function RidePlayer({ workout }: { workout: Workout }) {
+  const layout = useLayout();
   const segs = workout.segments;
   const total = useMemo(() => segs.reduce((n, s) => n + s.durationSec, 0), [segs]);
   const starts = useMemo(() => {
@@ -38,6 +45,7 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
   const [menu, setMenu] = useState(false);
   const [nextPrompt, setNextPrompt] = useState(TAP_EVERY);
   const [startedAt, setStartedAt] = useState("");
+  const startedAtRef = useRef("");
   const [runId, setRunId] = useState(0); // new id per ride, so each finish records once
 
   const elapsed = Math.min(total, clock.elapsedMs / 1000);
@@ -47,15 +55,39 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
   const segElapsed = elapsed - starts[index];
   const stepLeft = step.startSec + step.durationSec - elapsed;
 
+  // --- Keep a ride in progress across a reload (phones can discard the page while you are in the music app).
+  const persist = useCallback(() => {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ rideId: workout.id, startedAt: startedAtRef.current, savedAt: Date.now(), ...clock.getState() }));
+    } catch { /* storage can be unavailable; the ride still works */ }
+  }, [clock, workout.id]);
+  const clearActive = useCallback(() => { try { localStorage.removeItem(STORE_KEY); } catch { /* ignore */ } }, []);
+
+  useEffect(() => {
+    try {
+      const o = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
+      if (!o || o.rideId !== workout.id || typeof o.accMs !== "number") return;
+      if (Date.now() - (typeof o.since === "number" ? o.since : o.savedAt) > STALE_MS) return clearActive();
+      startedAtRef.current = o.startedAt || new Date().toISOString();
+      setStartedAt(startedAtRef.current);
+      clock.restore({ accMs: o.accMs, since: typeof o.since === "number" ? o.since : null });
+      setPhase("riding");
+      const live = typeof o.since === "number" ? Math.max(0, Date.now() - o.since) : 0;
+      setNextPrompt((o.accMs + live) / 1000 + TAP_EVERY);
+    } catch { /* ignore a corrupt entry */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Finish when the clock reaches the end.
   useEffect(() => {
     if (phase === "riding" && clock.elapsedMs / 1000 >= total) {
       clock.pause();
+      clearActive();
       setPhase("done");
     }
-  }, [phase, clock, total]);
+  }, [phase, clock, total, clearActive]);
 
-  // Screen Wake Lock: best effort, fail silently. The tap prompt is the real mechanism.
+  // Screen Wake Lock: best effort, fail silently. The tap prompt is the fallback.
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
   const acquire = useCallback(async () => {
     try {
@@ -76,30 +108,42 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
     };
   }, [phase, acquire]);
 
-  // Any tap anywhere keeps the tablet awake and resets the prompt countdown.
+  // Any tap anywhere keeps the screen awake and resets the prompt countdown.
   const onAnyTap = () => setNextPrompt(clock.elapsedMs / 1000 + TAP_EVERY);
 
   // Controls
   const startRide = () => {
-    setStartedAt(new Date().toISOString());
+    const iso = new Date().toISOString();
+    startedAtRef.current = iso;
+    setStartedAt(iso);
     clock.start();
     setPhase("riding");
     setNextPrompt(clock.elapsedMs / 1000 + TAP_EVERY);
+    persist();
   };
-  const toggle = () => (clock.running ? clock.pause() : clock.start());
+  const toggle = () => {
+    if (clock.running) { clock.pause(); setMenu(false); } else clock.start();
+    persist();
+  };
   const skip = () => {
     if (index >= segs.length - 1) return endRide();
     clock.seek((starts[index] + segs[index].durationSec) * 1000);
+    persist();
   };
-  const back = () => clock.seek((segElapsed > 3 ? starts[index] : starts[Math.max(0, index - 1)]) * 1000);
+  const back = () => {
+    clock.seek((segElapsed > 3 ? starts[index] : starts[Math.max(0, index - 1)]) * 1000);
+    persist();
+  };
   const endRide = () => {
     clock.pause();
+    clearActive();
     setPhase("done");
     setMenu(false);
   };
   const again = () => {
     setRunId((n) => n + 1);
     clock.reset();
+    clearActive();
     setPhase("ready");
     setNextPrompt(TAP_EVERY);
     setMenu(false);
@@ -107,19 +151,49 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
 
   // Auto-close the control drawer.
   useEffect(() => {
-    if (!menu) return;
+    if (!menu || layout?.phone) return;
     const id = setTimeout(() => setMenu(false), 8000);
     return () => clearTimeout(id);
-  }, [menu]);
+  }, [menu, layout?.phone]);
 
   const { now, next } = trackAt(workout, elapsed);
   const view: RideView = {
     workout, index, segElapsed, step, prevStep: steps[stepIdx - 1], nextStep: steps[stepIdx + 1],
     elapsed, total, tapIn: Math.max(0, nextPrompt - elapsed), now, next,
+    onPause: toggle,
   };
 
   const warning = phase === "riding" && stepIdx < steps.length - 1 && stepLeft <= step.warnSec;
   const showTap = phase === "riding" && !warning && elapsed >= nextPrompt;
+  const endedEarly = clock.elapsedMs / 1000 < total - 0.5;
+  const finish = phase === "done" && (
+    <FinishScreen
+      key={runId}
+      workout={workout}
+      startedAt={startedAt || new Date().toISOString()}
+      elapsedSec={Math.min(total, clock.elapsedMs / 1000)}
+      endedEarly={endedEarly}
+      segmentsCompleted={endedEarly ? index : segs.length}
+      onAgain={again}
+      compact={layout?.phone}
+      landscape={layout?.landscape}
+    />
+  );
+
+  if (layout === null) return <div className="fixed inset-0" style={{ background: "#002A33" }} />;
+
+  if (layout.phone) {
+    return (
+      <div onPointerDown={onAnyTap}>
+        <PhoneRide
+          landscape={layout.landscape} phase={phase} running={clock.running} speed={speed} v={view}
+          stepLeft={stepLeft} warning={warning} showTap={showTap} ignoredSec={elapsed - nextPrompt}
+          menu={menu} setMenu={setMenu} onStart={startRide} onToggle={toggle} onSkip={skip} onBack={back} onEnd={endRide}
+          finish={finish}
+        />
+      </div>
+    );
+  }
 
   return (
     <div onPointerDown={onAnyTap}>
@@ -151,17 +225,7 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
           </Overlay>
         )}
 
-        {phase === "done" && (
-          <FinishScreen
-            key={runId}
-            workout={workout}
-            startedAt={startedAt || new Date().toISOString()}
-            elapsedSec={Math.min(total, clock.elapsedMs / 1000)}
-            endedEarly={clock.elapsedMs / 1000 < total - 0.5}
-            segmentsCompleted={clock.elapsedMs / 1000 >= total - 0.5 ? segs.length : index}
-            onAgain={again}
-          />
-        )}
+        {finish}
 
         {phase === "riding" && (
           <>
@@ -182,11 +246,7 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
                 <CtlButton onClick={() => setMenu(false)}>Close</CtlButton>
               </div>
             )}
-            {!clock.running && !menu && (
-              <div className="absolute left-1/2 top-[110px] -translate-x-1/2 rounded-full bg-ice px-8 py-3 text-[18px] font-medium uppercase tracking-[.2em] text-ground" style={{ zIndex: 5 }}>
-                Paused
-              </div>
-            )}
+            {!clock.running && <PauseOverlay elapsed={elapsed} remaining={total - elapsed} onResume={toggle} onEnd={endRide} />}
           </>
         )}
       </Stage>
@@ -197,49 +257,5 @@ export default function RidePlayer({ workout }: { workout: Workout }) {
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-6 bg-ground/90 text-center">{children}</div>
-  );
-}
-
-function BigButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className="h-[84px] rounded-full bg-ice px-16 text-[22px] font-medium uppercase tracking-[.1em] text-ground">
-      {children}
-    </button>
-  );
-}
-
-function CtlButton({ onClick, children, primary }: { onClick: () => void; children: React.ReactNode; primary?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-[60px] rounded-full px-8 text-[16px] font-medium ${primary ? "bg-ice text-ground" : "border-2 border-line text-ink"}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-/** Press and hold 1.5s to confirm, so it can't be hit by accident. */
-function HoldButton({ onHold, children }: { onHold: () => void; children: React.ReactNode }) {
-  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [holding, setHolding] = useState(false);
-  const stop = () => {
-    if (t.current) clearTimeout(t.current);
-    t.current = null;
-    setHolding(false);
-  };
-  return (
-    <button
-      onPointerDown={() => {
-        setHolding(true);
-        t.current = setTimeout(() => { stop(); onHold(); }, 1500);
-      }}
-      onPointerUp={stop}
-      onPointerLeave={stop}
-      onPointerCancel={stop}
-      className={`h-[60px] rounded-full border-2 px-8 text-[16px] font-medium ${holding ? "border-ice bg-ice text-ground" : "border-line text-ink"}`}
-    >
-      {holding ? "Keep holding…" : children}
-    </button>
   );
 }
