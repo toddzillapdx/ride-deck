@@ -29,6 +29,8 @@ function keepTracks(v: unknown, segCount: number): Track[] {
     return {
       segmentIndex: t.segmentIndex as number, title: t.title.slice(0, 120), artist: t.artist.slice(0, 120),
       ...(typeof t.approxDurationSec === "number" ? { approxDurationSec: t.approxDurationSec } : {}),
+      ...(typeof t.genre === "string" ? { genre: t.genre.slice(0, 40) } : {}),
+      ...(typeof t.era === "string" ? { era: t.era.slice(0, 40) } : {}),
     };
   });
 }
@@ -45,13 +47,17 @@ export async function POST(req: Request) {
     const b = JSON.parse(text) as Record<string, unknown>;
     const workout = parseWorkout(b.workout);
     if (workout.segments.length > 40) throw new Error("Too many segments to plan (max 40)");
-    const genre = typeof b.genre === "string" ? b.genre.trim().slice(0, 40) : "";
+    const labels = (v: unknown, max: number) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 12).map((x) => x.trim().slice(0, max)) : []);
     const vibe = typeof b.vibe === "string" ? b.vibe.trim().slice(0, 40) : "";
-    if (!genre || !vibe) throw new Error("genre and vibe are required");
+    if (!vibe) throw new Error("vibe is required");
+    // `genre` (a single string) is accepted for older clients.
+    const genres = Array.isArray(b.genres) ? labels(b.genres, 30) : typeof b.genre === "string" && b.genre.trim() ? [b.genre.trim().slice(0, 30)] : [];
+    const eras = labels(b.eras, 20);
+    const seeds = typeof b.seeds === "string" ? b.seeds.trim().slice(0, 300) : "";
     const regenerate = Array.isArray(b.regenerate) ? b.regenerate.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < workout.segments.length) : [];
     if (!regenerate.length) throw new Error("regenerate must list at least one segment");
     const avoid = Array.isArray(b.avoid) ? b.avoid.filter((s): s is string => typeof s === "string").slice(0, 100).map((s) => s.slice(0, 120)) : [];
-    input = { workout, genre, vibe, regenerate, avoid, keep: keepTracks(b.keep ?? [], workout.segments.length) };
+    input = { workout, genres, eras, vibe, seeds, regenerate, avoid, keep: keepTracks(b.keep ?? [], workout.segments.length) };
   } catch (e) {
     return bad(e instanceof SyntaxError ? "Body must be JSON" : (e as Error).message);
   }

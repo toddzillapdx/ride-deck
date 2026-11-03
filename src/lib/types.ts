@@ -27,13 +27,22 @@ export interface Track {
   approxDurationSec?: number;
   /** One line on why the song fits the segment. */
   reason?: string;
+  /** The style label the planner filed this song under (one of the chosen genres/eras, or "Other"). */
+  genre?: string;
+  era?: string;
 }
 
 export interface Workout {
   id: string;
   name: string;
+  /** Display summary of the style, e.g. "90s, Hip-hop / Rap". The structured picks are eras/genres. */
   genre?: string;
   vibe?: string;
+  /** Style picks for the music planner. Empty means any. */
+  eras?: string[];
+  genres?: string[];
+  /** "Sounds like": songs, artists or a short note. */
+  seeds?: string;
   playlistUrl?: string;
   segments: Segment[];
   tracklist?: Track[];

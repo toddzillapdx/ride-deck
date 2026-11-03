@@ -51,11 +51,15 @@ export function parseWorkout(input: unknown): Workout {
         ...(isNum(t.approxBpm) ? { approxBpm: t.approxBpm } : {}),
         ...(isNum(t.approxDurationSec) ? { approxDurationSec: t.approxDurationSec } : {}),
         ...(typeof t.reason === "string" && t.reason ? { reason: t.reason } : {}),
+        ...(typeof t.genre === "string" && t.genre ? { genre: t.genre.slice(0, 40) } : {}),
+        ...(typeof t.era === "string" && t.era ? { era: t.era.slice(0, 40) } : {}),
       };
     });
   }
 
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const list = (v: unknown, max: number) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 12).map((x) => x.trim().slice(0, max)) : undefined;
   const playlistUrl = str(o.playlistUrl);
   if (playlistUrl && !/^https?:\/\//i.test(playlistUrl)) throw new Error("playlistUrl must start with http:// or https://");
 
@@ -64,6 +68,9 @@ export function parseWorkout(input: unknown): Workout {
     name: o.name.trim(),
     genre: str(o.genre),
     vibe: str(o.vibe),
+    eras: list(o.eras, 20),
+    genres: list(o.genres, 30),
+    seeds: typeof o.seeds === "string" && o.seeds.trim() ? o.seeds.trim().slice(0, 300) : undefined,
     playlistUrl,
     segments,
     tracklist,

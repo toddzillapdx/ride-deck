@@ -1,6 +1,7 @@
 import type { Track, Workout } from "./types";
 
-export const GENRES = ["Rock", "Pop", "Hip-hop", "Electronic", "Country", "R&B", "80s"] as const;
+export const ERAS = ["70s", "80s", "90s", "2000s", "2010s", "Now"] as const;
+export const GENRES = ["Rock", "Pop", "Hip-hop / Rap", "Grunge / Alt", "Punk", "Metal", "Electronic", "Country", "R&B"] as const;
 export const VIBES = ["Classic", "High energy", "Recent"] as const;
 export const DEFAULT_SONG_SEC = 210;
 
@@ -20,9 +21,9 @@ const csvCell = (v: string | number | undefined) => {
 
 export function toCsv(w: Workout, tracks: Track[]): string {
   const rows = tracks.map((t) =>
-    [t.segmentIndex + 1, w.segments[t.segmentIndex]?.name, t.title, t.artist, t.approxBpm, songSec(t)].map(csvCell).join(","),
+    [t.segmentIndex + 1, w.segments[t.segmentIndex]?.name, t.title, t.artist, t.approxBpm, songSec(t), t.genre, t.era].map(csvCell).join(","),
   );
-  return ["segment,segment_name,title,artist,approx_bpm,approx_seconds", ...rows].join("\n");
+  return ["segment,segment_name,title,artist,approx_bpm,approx_seconds,genre,era", ...rows].join("\n");
 }
 
 /** When each track starts, assuming songs in a segment play back to back from the segment's start. */
@@ -84,4 +85,39 @@ export function toPlaylistPrompt(w: Workout, tracks: Track[], genre?: string, vi
     `- the list of songs you added, in order`,
     `- the songs you skipped and why`,
   ].join("\n");
+}
+
+/** The style the planner works from. Empty eras or genres means "any". */
+export interface Style {
+  eras: string[];
+  genres: string[];
+  vibe: string;
+  seeds: string;
+}
+
+const GENRE_ALIASES: Record<string, string> = { "hip-hop": "Hip-hop / Rap", "hip hop": "Hip-hop / Rap", hiphop: "Hip-hop / Rap", rap: "Hip-hop / Rap", grunge: "Grunge / Alt", alt: "Grunge / Alt", alternative: "Grunge / Alt", dance: "Electronic", edm: "Electronic" };
+
+/** Rides saved before the style picks existed have a single genre string ("Rock", "80s"). Map it onto the chips. */
+export function styleFromWorkout(w: Pick<Workout, "genre" | "vibe" | "eras" | "genres" | "seeds">): Style {
+  const vibe = (VIBES as readonly string[]).includes(w.vibe ?? "") ? (w.vibe as string) : "Classic";
+  if (w.eras || w.genres || w.seeds) return { eras: w.eras ?? [], genres: w.genres ?? [], seeds: w.seeds ?? "", vibe };
+  const g = (w.genre ?? "").trim();
+  const era = ERAS.find((e) => e.toLowerCase() === g.toLowerCase());
+  const genre = GENRES.find((x) => x.toLowerCase() === g.toLowerCase()) ?? GENRE_ALIASES[g.toLowerCase()];
+  return { eras: era ? [era] : [], genres: genre ? [genre] : [], seeds: "", vibe };
+}
+
+/** Short label, e.g. "90s + 2000s · Rock + Hip-hop / Rap". */
+export function styleSummary(s: Pick<Style, "eras" | "genres">): string {
+  return [s.eras.length ? s.eras.join(" + ") : "Any era", s.genres.length ? s.genres.join(" + ") : "Any genre"].join(" · ");
+}
+
+/** What goes in the saved ride's Genre field: just the picks, comma separated. */
+export const styleForSave = (s: Pick<Style, "eras" | "genres">) => [...s.eras, ...s.genres].join(", ");
+
+/** How many songs landed under each chosen era and genre, so you can see the spread is even. */
+export function spreadCounts(tracks: Track[], s: Pick<Style, "eras" | "genres">): { genres: [string, number][]; eras: [string, number][] } {
+  const count = (labels: string[], pick: (t: Track) => string | undefined): [string, number][] =>
+    labels.map((l) => [l, tracks.filter((t) => pick(t)?.toLowerCase() === l.toLowerCase()).length]);
+  return { genres: count(s.genres, (t) => t.genre), eras: count(s.eras, (t) => t.era) };
 }

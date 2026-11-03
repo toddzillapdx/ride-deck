@@ -25,6 +25,10 @@ export interface WorkoutDraft {
   genre: string;
   vibe: string;
   playlistUrl: string;
+  /** Music-planner style picks. Not edited here, but kept so saving a ride doesn't drop them. */
+  eras: string[];
+  genres: string[];
+  seeds: string;
   segments: SegDraft[];
 }
 
@@ -69,7 +73,7 @@ export function intervals(workSec: number, restSec: number, rounds: number): Seg
 }
 
 export function emptyDraft(): WorkoutDraft {
-  return { name: "", genre: "", vibe: "", playlistUrl: "", segments: [newSegment("warmup"), newSegment("flat"), newSegment("cooldown")] };
+  return { name: "", genre: "", vibe: "", playlistUrl: "", eras: [], genres: [], seeds: "", segments: [newSegment("warmup"), newSegment("flat"), newSegment("cooldown")] };
 }
 
 const split = (t: Target | undefined): [string, string] =>
@@ -81,6 +85,9 @@ export function fromWorkout(w: Workout): WorkoutDraft {
     genre: w.genre ?? "",
     vibe: w.vibe ?? "",
     playlistUrl: w.playlistUrl ?? "",
+    eras: w.eras ?? [],
+    genres: w.genres ?? [],
+    seeds: w.seeds ?? "",
     segments: w.segments.map((s, i) => {
       const [cadMin, cadMax] = split(s.cadence);
       const [resMin, resMax] = split(s.resistance);
@@ -133,7 +140,7 @@ export function toWorkout(d: WorkoutDraft, id = ""): Workout {
     }
   });
   return parseWorkout({
-    id, name: d.name, genre: d.genre, vibe: d.vibe, playlistUrl: d.playlistUrl,
+    id, name: d.name, genre: d.genre, vibe: d.vibe, playlistUrl: d.playlistUrl, eras: d.eras, genres: d.genres, seeds: d.seeds,
     segments, tracklist: tracklist.length ? tracklist : undefined,
   });
 }

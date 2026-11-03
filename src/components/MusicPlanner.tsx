@@ -6,7 +6,7 @@ import { PRESETS, isPresetId, totalSeconds } from "@/lib/presets";
 import { fmtClock } from "@/lib/format";
 import { extractUrl, isHttpUrl, pasteLink } from "@/lib/url";
 import {
-  GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, toCsv, toPlaylistPrompt, toText,
+  ERAS, GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, spreadCounts, styleForSave, styleFromWorkout, styleSummary, toCsv, toPlaylistPrompt, toText,
 } from "@/lib/music";
 import type { Segment, Track, Workout } from "@/lib/types";
 
@@ -36,7 +36,9 @@ export default function MusicPlanner() {
   const wanted = useSearchParams().get("ride");
   const [saved, setSaved] = useState<Workout[]>([]);
   const [workout, setWorkout] = useState<Workout>(PRESETS[1]);
-  const [genre, setGenre] = useState<string>("Rock");
+  const [eras, setEras] = useState<string[]>([]);
+  const [genres, setGenres] = useState<string[]>(["Rock"]);
+  const [seeds, setSeeds] = useState("");
   const [vibe, setVibe] = useState<string>("Classic");
   const [tracks, setTracks] = useState<UiTrack[]>([]);
   const [playlistUrl, setPlaylistUrl] = useState("");
@@ -50,8 +52,11 @@ export default function MusicPlanner() {
     setWorkout(w);
     setTracks((w.tracklist ?? []).map(ui));
     setPlaylistUrl(w.playlistUrl ?? "");
-    if (w.genre) setGenre(w.genre);
-    if (w.vibe) setVibe(w.vibe);
+    const st = styleFromWorkout(w);
+    setEras(st.eras);
+    setGenres(st.genres);
+    setSeeds(st.seeds);
+    setVibe(st.vibe);
     setMsg(null);
   }, []);
 
@@ -80,7 +85,7 @@ export default function MusicPlanner() {
       const res = await fetch("/api/music/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-planner-passcode": pass },
-        body: JSON.stringify({ workout: { ...workout, tracklist: undefined }, genre, vibe, regenerate, keep: keepers.map(strip), avoid: replaced.map((t) => t.title) }),
+        body: JSON.stringify({ workout: { ...workout, tracklist: undefined }, eras, genres, seeds, vibe, regenerate, keep: keepers.map(strip), avoid: replaced.map((t) => t.title) }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 401) { setNeedPass(true); setMsg({ text: pass ? "That passcode didn't work." : "Enter the planner passcode." }); return; }
@@ -104,7 +109,7 @@ export default function MusicPlanner() {
     catch { setMsg({ text: "Couldn't copy automatically. Allow clipboard access and try again." }); }
   };
   const copyPrompt = async () => {
-    try { await navigator.clipboard.writeText(toPlaylistPrompt(workout, tracks.map(strip), genre, vibe)); setMsg({ text: "Prompt and songs copied. Paste it into a Claude in Chrome chat.", ok: true }); }
+    try { await navigator.clipboard.writeText(toPlaylistPrompt(workout, tracks.map(strip), styleSummary({ eras, genres }), vibe)); setMsg({ text: "Prompt and songs copied. Paste it into a Claude in Chrome chat.", ok: true }); }
     catch { setMsg({ text: "Couldn't copy automatically. Allow clipboard access and try again." }); }
   };
   const download = () => {
@@ -117,7 +122,7 @@ export default function MusicPlanner() {
   async function save() {
     setSaving(true); setMsg(null);
     const link = extractUrl(playlistUrl) || playlistUrl.trim();
-    const body = { ...workout, genre, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
+    const body = { ...workout, genre: styleForSave({ eras, genres }) || undefined, eras, genres, seeds: seeds.trim() || undefined, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
     const preset = isPresetId(workout.id);
     try {
       const res = await fetch(preset ? "/api/rides" : `/api/rides/${workout.id}`, { method: preset ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -133,12 +138,16 @@ export default function MusicPlanner() {
 
   const segs = workout.segments;
   const all = [...saved, ...PRESETS];
+  const mix = eras.length > 1 || genres.length > 1;
+  const spread = spreadCounts(tracks, { eras, genres });
+  // Even means every chosen era (and every chosen genre) is within one song of the others.
+  const uneven = [spread.eras, spread.genres].some((g) => g.length > 1 && Math.max(...g.map((x) => x[1])) - Math.min(...g.map((x) => x[1])) > 1);
 
   return (
     <Stage bg="#002A33">
       <div className="flex h-full gap-10 bg-ground text-ink" style={{ padding: "32px 56px", boxSizing: "border-box" }}>
         {/* left: controls */}
-        <div className="flex w-[340px] flex-none flex-col gap-4">
+        <div className="flex w-[340px] flex-none flex-col gap-3">
           <div className="flex flex-col gap-1">
             <a href="/" className="text-[13px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
             <span className="text-[34px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>Plan music</span>
@@ -156,8 +165,15 @@ export default function MusicPlanner() {
             </div>
           </div>
 
-          <Chips label="Genre" options={GENRES} value={genre} on={setGenre} />
+          <MultiChips label="Era" hint="none = any" options={ERAS} value={eras} on={setEras} />
+          <MultiChips label="Genre" hint="pick several for a mix" options={GENRES} value={genres} on={setGenres} />
           <Chips label="Vibe" options={VIBES} value={vibe} on={setVibe} />
+          <label className="flex flex-none flex-col gap-2">
+            <span className={lab}>Sounds like <span className="normal-case tracking-normal">(optional)</span></span>
+            <input value={seeds} onChange={(e) => setSeeds(e.target.value)} maxLength={300} spellCheck={false}
+              placeholder="Songs, artists, or a note"
+              className="h-11 rounded-[12px] border-2 border-line bg-tile px-3 text-[14px] text-ink outline-none focus:border-ice" />
+          </label>
 
           <button onClick={planAll} disabled={anyBusy} className="h-[60px] flex-none rounded-full bg-ice text-[16px] font-medium tracking-[.04em] text-ground disabled:opacity-50">
             {anyBusy ? "Planning…" : tracks.length ? "Regenerate unlocked" : "Plan tracklist"}
@@ -168,10 +184,15 @@ export default function MusicPlanner() {
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex items-end justify-between gap-4">
             <div className="flex min-w-0 flex-col gap-2">
-              <span className={lab}>Tracklist · {genre} · {vibe}</span>
+              <span className={lab}>Tracklist · {styleSummary({ eras, genres })} · {vibe}</span>
               <span className="text-[30px] font-light leading-none">
                 {tracks.length} song{tracks.length === 1 ? "" : "s"} · {fmtClock(plannedSec)} of {fmtClock(rideSec)}
               </span>
+              {mix && tracks.length > 0 && (
+                <span className={`text-[12px] font-light ${uneven ? "text-ice" : "text-mist"}`}>
+                  Spread · {[...spread.eras, ...spread.genres].map(([l, n]) => `${l} ${n}`).join(" · ")}{uneven ? " · uneven, try Regenerate unlocked" : ""}
+                </span>
+              )}
             </div>
           </div>
 
@@ -203,7 +224,7 @@ export default function MusicPlanner() {
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1" style={{ scrollbarWidth: "thin" }}>
             {!tracks.length && !anyBusy && (
               <div className="rounded-[16px] border-2 border-dashed border-line p-8 text-center text-[16px] text-mist">
-                Pick a ride, genre and vibe, then plan a tracklist paced to each segment.
+                Pick a ride, a style and a vibe, then plan a tracklist paced to each segment.
               </div>
             )}
             {(tracks.length > 0 || anyBusy) && segs.map((seg, i) => {
@@ -216,7 +237,7 @@ export default function MusicPlanner() {
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
                     <span className="truncate text-[16px] font-normal">{t ? t.title : loading ? "Finding a song…" : "No song of its own"}</span>
-                    <span className="truncate text-[13px] font-light text-mist">{t ? t.artist : "The previous song carries through, or redo to add one"}</span>
+                    <span className="truncate text-[13px] font-light text-mist">{t ? `${t.artist}${t.genre || t.era ? ` · ${[t.genre, t.era].filter(Boolean).join(" · ")}` : ""}` : "The previous song carries through, or redo to add one"}</span>
                   </div>
                   {t?.approxBpm && <span className="w-[52px] flex-none text-right text-[14px] font-light text-mist">~{t.approxBpm}</span>}
                   {t && <a href={amazonSearchUrl(t)} target="_blank" rel="noreferrer" className="w-[108px] flex-none text-right text-[13px] font-normal text-mist underline underline-offset-4">Find on Amazon</a>}
@@ -239,13 +260,30 @@ export default function MusicPlanner() {
   );
 }
 
+function MultiChips({ label, hint, options, value, on }: { label: string; hint: string; options: readonly string[]; value: string[]; on: (v: string[]) => void }) {
+  return (
+    <div className="flex flex-none flex-col gap-2">
+      <span className={lab}>{label} <span className="normal-case tracking-normal">· {hint}</span></span>
+      <div className="flex flex-wrap gap-[6px]">
+        {options.map((o) => {
+          const on_ = value.includes(o);
+          return (
+            <button key={o} aria-pressed={on_} onClick={() => on(on_ ? value.filter((x) => x !== o) : [...value, o])}
+              className={`rounded-full text-[13px] ${on_ ? "bg-ice px-[13px] py-[8px] font-medium text-ground" : "border-2 border-line px-[11px] py-[6px] text-ink"}`}>{o}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Chips({ label, options, value, on }: { label: string; options: readonly string[]; value: string; on: (v: string) => void }) {
   return (
     <div className="flex flex-none flex-col gap-2">
       <span className={lab}>{label}</span>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <button key={o} onClick={() => on(o)} className={`rounded-full text-[14px] ${o === value ? "bg-ice px-4 py-[10px] font-medium text-ground" : "border-2 border-line px-[14px] py-2 text-ink"}`}>{o}</button>
+          <button key={o} onClick={() => on(o)} className={`rounded-full text-[13px] ${o === value ? "bg-ice px-[13px] py-[8px] font-medium text-ground" : "border-2 border-line px-[11px] py-[6px] text-ink"}`}>{o}</button>
         ))}
       </div>
     </div>
