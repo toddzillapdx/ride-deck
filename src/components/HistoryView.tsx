@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
+import ConfirmDialog from "./ConfirmDialog";
 import { useLayout } from "@/lib/useLayout";
 import TargetsChart from "./TargetsChart";
 import KcalField from "./KcalField";
@@ -50,12 +51,34 @@ export default function HistoryView() {
     setLogs((ls) => ls.map((l) => (l.id === log.id ? (body as RideLog) : l)));
   }
 
-  async function remove(log: RideLog) {
-    if (!window.confirm(`Delete this ride from history?\n${log.rideName} · ${when(log.startedAt)}`)) return;
-    const res = await fetch(`/api/history/${log.id}`, { method: "DELETE" });
-    if (!res.ok) return window.alert((await res.json().catch(() => ({}))).error ?? "Delete failed");
-    setLogs((ls) => { const next = ls.filter((l) => l.id !== log.id); setSelected(next[0]?.id ?? null); return next; });
+  // Deleting a ride from history. Asks first, in-app (the browser pop-up is unreliable in an installed home-screen app).
+  const [ask, setAsk] = useState<RideLog | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  async function confirmRemove() {
+    if (!ask) return;
+    setBusy(true); setNotice("");
+    try {
+      const res = await fetch(`/api/history/${ask.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Delete failed");
+      setLogs((ls) => { const next = ls.filter((l) => l.id !== ask.id); setSelected((cur) => (cur === ask.id ? next[0]?.id ?? null : cur)); return next; });
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
+    setAsk(null);
+    setBusy(false);
   }
+  const dialog = (fixed: boolean) => ask && (
+    <ConfirmDialog
+      fixed={fixed}
+      title="Delete this ride from History?"
+      body={`${ask.rideName} · ${when(ask.startedAt)}${ask.kcal ? ` · ${ask.kcal} kcal` : ""}. It will no longer count in your totals, and this can't be undone.`}
+      confirmLabel="Delete ride"
+      busy={busy}
+      onConfirm={confirmRemove}
+      onCancel={() => setAsk(null)}
+    />
+  );
 
   const layout = useLayout();
   if (layout === null) return <div className="fixed inset-0" style={{ background: "#002A33" }} />;
@@ -105,7 +128,7 @@ export default function HistoryView() {
                         {rideExists(l.rideId)
                           ? <a href={`/ride/${l.rideId}`} className="flex h-[48px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">Ride again</a>
                           : <span className="flex h-[48px] items-center text-[12px] text-mist">Original ride was deleted</span>}
-                        <button onClick={() => remove(l)} className="ml-auto h-[48px] rounded-full border-2 border-line px-5 text-[13px] text-mist">Delete</button>
+                        <button onClick={() => setAsk(l)} className="ml-auto h-[48px] rounded-full border-2 border-line px-5 text-[14px] font-medium text-ink">Delete ride</button>
                       </div>
                     </div>
                   )}
@@ -114,6 +137,8 @@ export default function HistoryView() {
             })}
           </div>
         )}
+        {notice && <p className="pt-3 text-center text-[13px] text-ice">{notice}</p>}
+        {dialog(true)}
       </PhoneShell>
     );
   }
@@ -180,13 +205,15 @@ export default function HistoryView() {
                   {rideExists(sel.rideId)
                     ? <a href={`/ride/${sel.rideId}`} className="flex h-[52px] items-center rounded-full bg-ice px-7 text-[15px] font-medium text-ground">Ride again</a>
                     : <span className="flex h-[52px] items-center rounded-full border-2 border-line px-7 text-[14px] text-mist">Original ride was deleted</span>}
-                  <button onClick={() => remove(sel)} className="h-[52px] rounded-full border-2 border-line px-6 text-[14px] text-mist">Delete entry</button>
+                  <button onClick={() => setAsk(sel)} className="h-[52px] rounded-full border-2 border-line px-6 text-[14px] font-medium text-ink">Delete ride</button>
                 </div>
               </div>
             )}
           </div>
         )}
       </div>
+      {notice && <p className="absolute bottom-3 left-14 text-[14px] text-ice">{notice}</p>}
+      {dialog(false)}
     </Stage>
   );
 }

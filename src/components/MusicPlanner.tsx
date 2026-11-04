@@ -5,6 +5,7 @@ import Stage from "./Stage";
 import { PRESETS, isPresetId, totalSeconds } from "@/lib/presets";
 import { fmtClock } from "@/lib/format";
 import { extractUrl, isHttpUrl, pasteLink } from "@/lib/url";
+import { useHiddenPresets } from "@/lib/hiddenPresets";
 import {
   ERAS, GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, spreadCounts, styleForSave, styleFromWorkout, styleSummary, toCsv, toPlaylistPrompt, toText,
 } from "@/lib/music";
@@ -47,6 +48,7 @@ export default function MusicPlanner() {
   const [needPass, setNeedPass] = useState(false);
   const [pass, setPass] = useState("");
   const [saving, setSaving] = useState(false);
+  const { hidden, ready } = useHiddenPresets();
 
   const choose = useCallback((w: Workout) => {
     setWorkout(w);
@@ -136,8 +138,16 @@ export default function MusicPlanner() {
     finally { setSaving(false); }
   }
 
+  // If the ride the planner opened on is a starter ride you removed, start from the first ride that is left.
+  useEffect(() => {
+    if (!ready || wanted || !isPresetId(workout.id) || !hidden.includes(workout.id)) return;
+    const next = [...saved, ...PRESETS.filter((p) => !hidden.includes(p.id))][0];
+    if (next) choose(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, hidden, saved]);
+
   const segs = workout.segments;
-  const all = [...saved, ...PRESETS];
+  const all = [...saved, ...PRESETS.filter((p) => !hidden.includes(p.id))];
   const mix = eras.length > 1 || genres.length > 1;
   const spread = spreadCounts(tracks, { eras, genres });
   // Even means every chosen era (and every chosen genre) is within one song of the others.

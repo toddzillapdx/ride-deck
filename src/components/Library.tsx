@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
+import ConfirmDialog from "./ConfirmDialog";
+import { useHiddenPresets } from "@/lib/hiddenPresets";
 import { useLayout } from "@/lib/useLayout";
 import { PRESETS, isPresetId, totalSeconds } from "@/lib/presets";
 import { fmtClock } from "@/lib/format";
@@ -35,14 +37,48 @@ export default function Library() {
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
-  const remove = async (w: Workout) => {
-    if (!window.confirm(`Delete "${w.name}"?`)) return;
-    const res = await fetch(`/api/rides/${w.id}`, { method: "DELETE" });
-    if (res.ok) setSaved((s) => s.filter((x) => x.id !== w.id));
-    else window.alert((await res.json().catch(() => ({}))).error ?? "Delete failed");
-  };
-
   const layout = useLayout();
+  const layoutPhone = layout?.phone;
+
+  // Deleting: your own rides are removed from Airtable; the built-in starter rides are hidden (and can be restored).
+  const { hidden, hide, restoreAll } = useHiddenPresets();
+  const [ask, setAsk] = useState<{ w: Workout; mine: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const visiblePresets = PRESETS.filter((p) => !hidden.includes(p.id));
+
+  const confirmDelete = async () => {
+    if (!ask) return;
+    setBusy(true); setNotice("");
+    try {
+      if (ask.mine) {
+        const res = await fetch(`/api/rides/${ask.w.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Delete failed");
+        setSaved((s) => s.filter((x) => x.id !== ask.w.id));
+      } else {
+        await hide(ask.w.id);
+      }
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
+    setAsk(null);
+    setBusy(false);
+  };
+  const restore = () => restoreAll().catch((e: Error) => setNotice(e.message));
+  const dialog = ask && (
+    <ConfirmDialog
+      fixed={!!layoutPhone}
+      title={ask.mine ? `Delete "${ask.w.name}"?` : `Remove "${ask.w.name}"?`}
+      body={ask.mine
+        ? "This deletes the ride from your library and can't be undone. Rides you've already finished stay in History."
+        : "It disappears from the library and the music planner, on every device. You can bring the starter rides back any time with Restore starter rides."}
+      confirmLabel={ask.mine ? "Delete" : "Remove"}
+      busy={busy}
+      onConfirm={confirmDelete}
+      onCancel={() => setAsk(null)}
+    />
+  );
+
   const [hint, setHint] = useState(false);
   useEffect(() => {
     try {
@@ -53,7 +89,7 @@ export default function Library() {
 
   if (layout === null) return <div className="fixed inset-0" style={{ background: "#002A33" }} />;
   if (layout.phone) {
-    const all = [...saved.map((w) => ({ w, mine: true })), ...PRESETS.map((w) => ({ w, mine: false }))];
+    const all = [...saved.map((w) => ({ w, mine: true })), ...visiblePresets.map((w) => ({ w, mine: false }))];
     return (
       <PhoneShell>
         <div className="flex items-end justify-between gap-3 pb-4">
@@ -74,13 +110,23 @@ export default function Library() {
                   <span className="text-[12px] font-light leading-snug text-mist">
                     {mine ? "Mine · " : ""}{fmtClock(totalSeconds(w))} · {w.segments.length} segment{w.segments.length === 1 ? "" : "s"}{climbs ? ` · ${climbs} climb${climbs > 1 ? "s" : ""}` : ""}{sprints ? ` · ${sprints} sprint${sprints > 1 ? "s" : ""}` : ""}
                   </span>
-                  {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[32px] items-center text-[12px] text-ice underline underline-offset-4">Playlist ↗</a>}
+                  <div className="flex items-center gap-5">
+                    {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[44px] items-center text-[13px] text-ice underline underline-offset-4">Playlist ↗</a>}
+                    <button onClick={() => setAsk({ w, mine })} className="flex h-[44px] items-center px-1 text-[13px] text-mist underline underline-offset-4">{mine ? "Delete" : "Remove"}</button>
+                  </div>
                 </div>
                 <a href={`/ride/${w.id}`} className="flex h-[52px] flex-none items-center rounded-full bg-ice px-7 text-[16px] font-medium text-ground">Start</a>
               </div>
             );
           })}
         </div>
+        {all.length === 0 && (
+          <div className="rounded-[18px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">No rides yet. Build one on a computer, or restore the starter rides.</div>
+        )}
+        {notice && <p className="pt-3 text-center text-[13px] text-ice">{notice}</p>}
+        {hidden.length > 0 && (
+          <button onClick={restore} className="mt-4 flex h-[44px] w-full items-center justify-center text-[13px] text-mist underline underline-offset-4">Restore starter rides ({hidden.length} removed)</button>
+        )}
         {hint && (
           <div className="mt-4 flex items-start justify-between gap-3 rounded-[14px] border-2 border-line px-4 py-3 text-[12px] font-light text-mist">
             <span>Tip: tap Share, then Add to Home Screen, to open RideDeck full screen without the browser bar.</span>
@@ -88,6 +134,7 @@ export default function Library() {
           </div>
         )}
         <p className="pt-4 text-center text-[11px] font-light text-mist">Build rides and plan music on a computer.</p>
+        {dialog}
       </PhoneShell>
     );
   }
@@ -115,15 +162,25 @@ export default function Library() {
         <div className="min-h-0 flex-1 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
           {saved.length > 0 && (
             <Section label="My rides">
-              {saved.map((w) => <Card key={w.id} w={w} onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => remove(w)} />)}
+              {saved.map((w) => <Card key={w.id} w={w} mine onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => setAsk({ w, mine: true })} />)}
             </Section>
           )}
-          <Section label="Presets">
-            {PRESETS.map((w) => <Card key={w.id} w={w} onExport={() => setModal({ kind: "export", workout: w })} />)}
-          </Section>
+          {visiblePresets.length > 0 && (
+            <Section label="Starter rides">
+              {visiblePresets.map((w) => <Card key={w.id} w={w} onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => setAsk({ w, mine: false })} />)}
+            </Section>
+          )}
+          {saved.length === 0 && visiblePresets.length === 0 && (
+            <div className="rounded-[20px] border-2 border-dashed border-line p-10 text-center text-[18px] text-mist">No rides yet. Tap New ride to build one, or restore the starter rides.</div>
+          )}
+          {notice && <p className="pb-3 text-[14px] text-ice">{notice}</p>}
+          {hidden.length > 0 && (
+            <button onClick={restore} className="pb-2 text-[13px] text-mist underline underline-offset-4">Restore starter rides ({hidden.length} removed)</button>
+          )}
         </div>
       </div>
 
+      {dialog}
       {modal && <JsonModal modal={modal} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} canSave={status === "ok"} />}
     </Stage>
   );
@@ -138,7 +195,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Card({ w, onExport, onDelete }: { w: Workout; onExport: () => void; onDelete?: () => void }) {
+function Card({ w, mine, onExport, onDelete }: { w: Workout; mine?: boolean; onExport: () => void; onDelete: () => void }) {
   const climbs = w.segments.filter((s) => s.type === "climb").length;
   const sprints = w.segments.filter((s) => s.type === "sprint").length;
   return (
@@ -149,12 +206,12 @@ function Card({ w, onExport, onDelete }: { w: Workout; onExport: () => void; onD
           {fmtClock(totalSeconds(w))} · {w.segments.length} segment{w.segments.length === 1 ? "" : "s"}{climbs ? ` · ${climbs} climb${climbs > 1 ? "s" : ""}` : ""}{sprints ? ` · ${sprints} sprint${sprints > 1 ? "s" : ""}` : ""}
         </span>
         <span className="flex gap-4 text-[13px] font-normal text-mist">
-          {onDelete && !isPresetId(w.id) && <a href={`/builder/${w.id}`} className="underline underline-offset-4">Edit</a>}
+          {mine && !isPresetId(w.id) && <a href={`/builder/${w.id}`} className="underline underline-offset-4">Edit</a>}
           <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate</a>
           <a href={`/music?ride=${w.id}`} className="underline underline-offset-4">Music</a>
           {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="text-ice underline underline-offset-4">Playlist ↗</a>}
           <button onClick={onExport} className="underline underline-offset-4">Export</button>
-          {onDelete && !isPresetId(w.id) && <button onClick={onDelete} className="underline underline-offset-4">Delete</button>}
+          <button onClick={onDelete} className="underline underline-offset-4">{mine ? "Delete" : "Remove"}</button>
         </span>
       </div>
       <a href={`/ride/${w.id}`} className="flex h-[60px] items-center rounded-full bg-ice px-7 text-[16px] font-medium text-ground">Start</a>

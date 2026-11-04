@@ -17,6 +17,11 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A tablet (Fire HD 10, Silk br
 
 `/builder/new` creates a ride, `/builder/<id>` edits a saved one, and `/builder/new?from=<id>` copies any ride (presets always open as a copy, since they are read-only). Add segments by type, use the Intervals box for work/rest pairs, reorder with the arrows, duplicate or delete a segment, and leave cadence or resistance blank for no target. Tracks attached by the music planner follow their segment when you reorder or duplicate. Saving needs Airtable to be configured.
 
+## Deleting rides
+
+- **Library:** every card has **Delete** (your own rides) or **Remove** (the built-in starter rides), with an in-app confirmation. Deleting your own ride removes it from Airtable for good; rides you already finished stay in History. Removing a starter ride hides it from the library and the music planner on every device. **Restore starter rides** at the bottom of the library brings them back. The choice is stored in one reserved row of the `Rides` table named `__settings__` (the app never shows it as a ride), or only on that device if Airtable isn't connected. Starter rides still open by id, so older History entries can still **Ride again**.
+- **History:** open a ride and tap **Delete ride**. It asks first, then removes it from History and from your totals.
+
 ## On a phone
 
 Phones (short side under 600 px) get their own layout instead of the scaled tablet canvas: the library, the whole ride (start screen, ride, change warning, tap prompt, pause, finish) and history, in landscape and portrait. Target numbers are sized to fill their tile, buttons are thumb-sized, and the layout pads for notches and the home indicator. Tablets and desktops keep the 1280x800 canvas. Building rides and planning music stay on the canvas layout, which is meant for a computer.

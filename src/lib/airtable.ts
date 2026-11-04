@@ -6,6 +6,8 @@ import type { Workout } from "./types";
 /** Server-side only. The token never reaches the browser. */
 const API = "https://api.airtable.com/v0";
 const TABLE = "Rides";
+/** App settings live in one reserved row of the Rides table, so no extra table or token scope is needed. */
+export const SETTINGS_NAME = "__settings__";
 
 export class AirtableNotConfigured extends Error {}
 
@@ -68,6 +70,7 @@ export async function listRides(): Promise<{ rides: Workout[]; skipped: string[]
     if (offset) q.set("offset", offset);
     const page = await call(`${TABLE}?${q}`);
     for (const r of page.records as AtRecord[]) {
+      if (r.fields.Name === SETTINGS_NAME) continue; // app settings, not a ride
       try { rides.push(fromRecord(r)); } catch { skipped.push(r.id); }
     }
     offset = page.offset;
@@ -160,4 +163,34 @@ export async function updateLog(id: string, patch: { kcal?: number | null; notes
 
 export async function deleteLog(id: string): Promise<void> {
   await call(`${LOG_TABLE}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ---- App settings (shared across devices)
+export interface AppSettings {
+  /** Built-in starter rides the user has removed. They stay resolvable by id, so old history still works. */
+  hiddenPresets: string[];
+}
+
+async function settingsRecord(): Promise<AtRecord | undefined> {
+  const q = new URLSearchParams({ filterByFormula: `{Name}="${SETTINGS_NAME}"`, maxRecords: "1" });
+  const page = await call(`${TABLE}?${q}`);
+  return (page.records as AtRecord[])[0];
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const rec = await settingsRecord();
+  try {
+    const o = JSON.parse(String(rec?.fields.WorkoutJson ?? "{}"));
+    return { hiddenPresets: Array.isArray(o.hiddenPresets) ? o.hiddenPresets.filter((x: unknown): x is string => typeof x === "string") : [] };
+  } catch {
+    return { hiddenPresets: [] };
+  }
+}
+
+export async function putSettings(s: AppSettings): Promise<AppSettings> {
+  const fields = { Name: SETTINGS_NAME, WorkoutJson: JSON.stringify(s), UpdatedAt: new Date().toISOString() };
+  const rec = await settingsRecord();
+  if (rec) await call(`${TABLE}/${encodeURIComponent(rec.id)}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+  else await call(TABLE, { method: "POST", body: JSON.stringify({ fields }) });
+  return s;
 }
