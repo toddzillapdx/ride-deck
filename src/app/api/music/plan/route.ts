@@ -54,17 +54,19 @@ export async function POST(req: Request) {
     const genres = Array.isArray(b.genres) ? labels(b.genres, 30) : typeof b.genre === "string" && b.genre.trim() ? [b.genre.trim().slice(0, 30)] : [];
     const eras = labels(b.eras, 20);
     const seeds = typeof b.seeds === "string" ? b.seeds.trim().slice(0, 300) : "";
+    const artistOnly = b.artistOnly === true;
+    if (artistOnly && !seeds) throw new Error("Type an artist or a song in Sounds like first.");
     const regenerate = Array.isArray(b.regenerate) ? b.regenerate.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < workout.segments.length) : [];
     if (!regenerate.length) throw new Error("regenerate must list at least one segment");
     const avoid = Array.isArray(b.avoid) ? b.avoid.filter((s): s is string => typeof s === "string").slice(0, 100).map((s) => s.slice(0, 120)) : [];
-    input = { workout, genres, eras, vibe, seeds, regenerate, avoid, keep: keepTracks(b.keep ?? [], workout.segments.length) };
+    input = { workout, genres, eras, vibe, seeds, artistOnly, regenerate, avoid, keep: keepTracks(b.keep ?? [], workout.segments.length) };
   } catch (e) {
     return bad(e instanceof SyntaxError ? "Body must be JSON" : (e as Error).message);
   }
 
   try {
     const client = new Anthropic(); // reads ANTHROPIC_API_KEY
-    return NextResponse.json({ tracks: await planTracks(client, input) });
+    return NextResponse.json(await planTracks(client, input));
   } catch (e) {
     if (e instanceof PlannerError) return bad(e.message, e.status);
     if (e instanceof Anthropic.AuthenticationError) return bad("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY in Vercel.", 502);

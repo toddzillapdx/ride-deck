@@ -71,6 +71,7 @@ export function parseWorkout(input: unknown): Workout {
     eras: list(o.eras, 20),
     genres: list(o.genres, 30),
     seeds: typeof o.seeds === "string" && o.seeds.trim() ? o.seeds.trim().slice(0, 300) : undefined,
+    artistOnly: o.artistOnly === true ? true : undefined,
     playlistUrl,
     segments,
     tracklist,

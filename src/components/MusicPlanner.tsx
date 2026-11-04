@@ -40,6 +40,7 @@ export default function MusicPlanner() {
   const [eras, setEras] = useState<string[]>([]);
   const [genres, setGenres] = useState<string[]>(["Rock"]);
   const [seeds, setSeeds] = useState("");
+  const [artistOnly, setArtistOnly] = useState(false);
   const [vibe, setVibe] = useState<string>("Classic");
   const [tracks, setTracks] = useState<UiTrack[]>([]);
   const [playlistUrl, setPlaylistUrl] = useState("");
@@ -58,6 +59,7 @@ export default function MusicPlanner() {
     setEras(st.eras);
     setGenres(st.genres);
     setSeeds(st.seeds);
+    setArtistOnly(st.artistOnly);
     setVibe(st.vibe);
     setMsg(null);
   }, []);
@@ -87,7 +89,7 @@ export default function MusicPlanner() {
       const res = await fetch("/api/music/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-planner-passcode": pass },
-        body: JSON.stringify({ workout: { ...workout, tracklist: undefined }, eras, genres, seeds, vibe, regenerate, keep: keepers.map(strip), avoid: replaced.map((t) => t.title) }),
+        body: JSON.stringify({ workout: { ...workout, tracklist: undefined }, eras, genres, seeds, artistOnly: artistOnly && !!seeds.trim(), vibe, regenerate, keep: keepers.map(strip), avoid: replaced.map((t) => t.title) }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 401) { setNeedPass(true); setMsg({ text: pass ? "That passcode didn't work." : "Enter the planner passcode." }); return; }
@@ -95,7 +97,9 @@ export default function MusicPlanner() {
       setNeedPass(false);
       const fresh: Track[] = body.tracks ?? [];
       setTracks(mergeTracks(keepers, fresh.map(ui)));
-      if (!fresh.length && regenerate.length === 1) setMsg({ text: "No new song came back for that. Try again." });
+      const notes: string[] = Array.isArray(body.notes) ? body.notes : [];
+      if (!fresh.length && regenerate.length === 1) setMsg({ text: notes.join(" ") || "No new song came back for that. Try again." });
+      else if (notes.length) setMsg({ text: notes.join(" "), ok: !fresh.length ? false : true });
     } catch (e) {
       setMsg({ text: (e as Error).message });
     } finally {
@@ -111,7 +115,7 @@ export default function MusicPlanner() {
     catch { setMsg({ text: "Couldn't copy automatically. Allow clipboard access and try again." }); }
   };
   const copyPrompt = async () => {
-    try { await navigator.clipboard.writeText(toPlaylistPrompt(workout, tracks.map(strip), styleSummary({ eras, genres }), vibe)); setMsg({ text: "Prompt and songs copied. Paste it into a Claude in Chrome chat.", ok: true }); }
+    try { await navigator.clipboard.writeText(toPlaylistPrompt(workout, tracks.map(strip), styleSummary({ eras, genres, artistOnly: onlyArtist, seeds }), vibe)); setMsg({ text: "Prompt and songs copied. Paste it into a Claude in Chrome chat.", ok: true }); }
     catch { setMsg({ text: "Couldn't copy automatically. Allow clipboard access and try again." }); }
   };
   const download = () => {
@@ -124,7 +128,7 @@ export default function MusicPlanner() {
   async function save() {
     setSaving(true); setMsg(null);
     const link = extractUrl(playlistUrl) || playlistUrl.trim();
-    const body = { ...workout, genre: styleForSave({ eras, genres }) || undefined, eras, genres, seeds: seeds.trim() || undefined, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
+    const body = { ...workout, genre: styleForSave({ eras, genres, artistOnly: onlyArtist, seeds }) || undefined, eras, genres, seeds: seeds.trim() || undefined, artistOnly: onlyArtist || undefined, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
     const preset = isPresetId(workout.id);
     try {
       const res = await fetch(preset ? "/api/rides" : `/api/rides/${workout.id}`, { method: preset ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -148,7 +152,8 @@ export default function MusicPlanner() {
 
   const segs = workout.segments;
   const all = [...saved, ...PRESETS.filter((p) => !hidden.includes(p.id))];
-  const mix = eras.length > 1 || genres.length > 1;
+  const onlyArtist = artistOnly && !!seeds.trim(); // the checkbox only counts while an artist or song is typed
+  const mix = !onlyArtist && (eras.length > 1 || genres.length > 1);
   const spread = spreadCounts(tracks, { eras, genres });
   // Even means every chosen era (and every chosen genre) is within one song of the others.
   const uneven = [spread.eras, spread.genres].some((g) => g.length > 1 && Math.max(...g.map((x) => x[1])) - Math.min(...g.map((x) => x[1])) > 1);
@@ -175,14 +180,24 @@ export default function MusicPlanner() {
             </div>
           </div>
 
-          <MultiChips label="Era" hint="none = any" options={ERAS} value={eras} on={setEras} />
-          <MultiChips label="Genre" hint="pick several for a mix" options={GENRES} value={genres} on={setGenres} />
+          <MultiChips label="Era" hint={onlyArtist ? "not used for one artist" : "none = any"} options={ERAS} value={eras} on={setEras} disabled={onlyArtist} />
+          <MultiChips label="Genre" hint={onlyArtist ? "not used for one artist" : "pick several for a mix"} options={GENRES} value={genres} on={setGenres} disabled={onlyArtist} />
           <Chips label="Vibe" options={VIBES} value={vibe} on={setVibe} />
           <label className="flex flex-none flex-col gap-2">
             <span className={lab}>Sounds like <span className="normal-case tracking-normal">(optional)</span></span>
             <input value={seeds} onChange={(e) => setSeeds(e.target.value)} maxLength={300} spellCheck={false}
               placeholder="Songs, artists, or a note"
               className="h-11 rounded-[12px] border-2 border-line bg-tile px-3 text-[14px] text-ink outline-none focus:border-ice" />
+          </label>
+          <label className={`flex flex-none items-start gap-3 ${seeds.trim() ? "cursor-pointer" : "opacity-40"}`}>
+            <input type="checkbox" checked={onlyArtist} disabled={!seeds.trim()} onChange={(e) => setArtistOnly(e.target.checked)}
+              className="mt-[2px] h-[22px] w-[22px] flex-none accent-[#C4DFE6]" aria-describedby="artist-only-help" />
+            <span className="flex flex-col gap-[2px]">
+              <span className="text-[14px] font-normal">All songs by this artist</span>
+              <span id="artist-only-help" className="text-[12px] font-light leading-snug text-mist">
+                {seeds.trim() ? "Only the artist you typed (or the artist of the song). Not similar artists." : "Type an artist or a song first."}
+              </span>
+            </span>
           </label>
 
           <button onClick={planAll} disabled={anyBusy} className="h-[60px] flex-none rounded-full bg-ice text-[16px] font-medium tracking-[.04em] text-ground disabled:opacity-50">
@@ -194,7 +209,7 @@ export default function MusicPlanner() {
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex items-end justify-between gap-4">
             <div className="flex min-w-0 flex-col gap-2">
-              <span className={lab}>Tracklist · {styleSummary({ eras, genres })} · {vibe}</span>
+              <span className={lab}>Tracklist · {styleSummary({ eras, genres, artistOnly: onlyArtist, seeds })} · {vibe}</span>
               <span className="text-[30px] font-light leading-none">
                 {tracks.length} song{tracks.length === 1 ? "" : "s"} · {fmtClock(plannedSec)} of {fmtClock(rideSec)}
               </span>
@@ -270,15 +285,15 @@ export default function MusicPlanner() {
   );
 }
 
-function MultiChips({ label, hint, options, value, on }: { label: string; hint: string; options: readonly string[]; value: string[]; on: (v: string[]) => void }) {
+function MultiChips({ label, hint, options, value, on, disabled }: { label: string; hint: string; options: readonly string[]; value: string[]; on: (v: string[]) => void; disabled?: boolean }) {
   return (
-    <div className="flex flex-none flex-col gap-2">
+    <div className={`flex flex-none flex-col gap-2 ${disabled ? "opacity-40" : ""}`}>
       <span className={lab}>{label} <span className="normal-case tracking-normal">· {hint}</span></span>
       <div className="flex flex-wrap gap-[6px]">
         {options.map((o) => {
           const on_ = value.includes(o);
           return (
-            <button key={o} aria-pressed={on_} onClick={() => on(on_ ? value.filter((x) => x !== o) : [...value, o])}
+            <button key={o} aria-pressed={on_} disabled={disabled} onClick={() => on(on_ ? value.filter((x) => x !== o) : [...value, o])}
               className={`rounded-full text-[13px] ${on_ ? "bg-ice px-[13px] py-[8px] font-medium text-ground" : "border-2 border-line px-[11px] py-[6px] text-ink"}`}>{o}</button>
           );
         })}

@@ -93,27 +93,31 @@ export interface Style {
   genres: string[];
   vibe: string;
   seeds: string;
+  /** Only the artist(s) named in `seeds`. Era and genre are then ignored. */
+  artistOnly: boolean;
 }
 
 const GENRE_ALIASES: Record<string, string> = { "hip-hop": "Hip-hop / Rap", "hip hop": "Hip-hop / Rap", hiphop: "Hip-hop / Rap", rap: "Hip-hop / Rap", grunge: "Grunge / Alt", alt: "Grunge / Alt", alternative: "Grunge / Alt", dance: "Electronic", edm: "Electronic" };
 
 /** Rides saved before the style picks existed have a single genre string ("Rock", "80s"). Map it onto the chips. */
-export function styleFromWorkout(w: Pick<Workout, "genre" | "vibe" | "eras" | "genres" | "seeds">): Style {
+export function styleFromWorkout(w: Pick<Workout, "genre" | "vibe" | "eras" | "genres" | "seeds" | "artistOnly">): Style {
   const vibe = (VIBES as readonly string[]).includes(w.vibe ?? "") ? (w.vibe as string) : "Classic";
-  if (w.eras || w.genres || w.seeds) return { eras: w.eras ?? [], genres: w.genres ?? [], seeds: w.seeds ?? "", vibe };
+  if (w.eras || w.genres || w.seeds) return { eras: w.eras ?? [], genres: w.genres ?? [], seeds: w.seeds ?? "", vibe, artistOnly: w.artistOnly === true && !!(w.seeds ?? "").trim() };
   const g = (w.genre ?? "").trim();
   const era = ERAS.find((e) => e.toLowerCase() === g.toLowerCase());
   const genre = GENRES.find((x) => x.toLowerCase() === g.toLowerCase()) ?? GENRE_ALIASES[g.toLowerCase()];
-  return { eras: era ? [era] : [], genres: genre ? [genre] : [], seeds: "", vibe };
+  return { eras: era ? [era] : [], genres: genre ? [genre] : [], seeds: "", vibe, artistOnly: false };
 }
 
 /** Short label, e.g. "90s + 2000s · Rock + Hip-hop / Rap". */
-export function styleSummary(s: Pick<Style, "eras" | "genres">): string {
+export function styleSummary(s: Pick<Style, "eras" | "genres"> & Partial<Pick<Style, "artistOnly" | "seeds">>): string {
+  if (s.artistOnly && s.seeds?.trim()) return `Artist only: ${s.seeds.trim().slice(0, 40)}`;
   return [s.eras.length ? s.eras.join(" + ") : "Any era", s.genres.length ? s.genres.join(" + ") : "Any genre"].join(" · ");
 }
 
 /** What goes in the saved ride's Genre field: just the picks, comma separated. */
-export const styleForSave = (s: Pick<Style, "eras" | "genres">) => [...s.eras, ...s.genres].join(", ");
+export const styleForSave = (s: Pick<Style, "eras" | "genres"> & Partial<Pick<Style, "artistOnly" | "seeds">>) =>
+  s.artistOnly && s.seeds?.trim() ? `Artist only: ${s.seeds.trim().slice(0, 40)}` : [...s.eras, ...s.genres].join(", ");
 
 /** How many songs landed under each chosen era and genre, so you can see the spread is even. */
 export function spreadCounts(tracks: Track[], s: Pick<Style, "eras" | "genres">): { genres: [string, number][]; eras: [string, number][] } {

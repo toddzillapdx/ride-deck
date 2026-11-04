@@ -43,6 +43,8 @@ export interface Workout {
   genres?: string[];
   /** "Sounds like": songs, artists or a short note. */
   seeds?: string;
+  /** Play only the artist(s) named in `seeds` (or the artist of a named song), not similar ones. */
+  artistOnly?: boolean;
   playlistUrl?: string;
   segments: Segment[];
   tracklist?: Track[];
