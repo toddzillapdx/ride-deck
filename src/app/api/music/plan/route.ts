@@ -58,8 +58,9 @@ export async function POST(req: Request) {
     if (artistOnly && !seeds) throw new Error("Type an artist or a song in Sounds like first.");
     const regenerate = Array.isArray(b.regenerate) ? b.regenerate.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < workout.segments.length) : [];
     if (!regenerate.length) throw new Error("regenerate must list at least one segment");
-    const avoid = Array.isArray(b.avoid) ? b.avoid.filter((s): s is string => typeof s === "string").slice(0, 100).map((s) => s.slice(0, 120)) : [];
-    input = { workout, genres, eras, vibe, seeds, artistOnly, regenerate, avoid, keep: keepTracks(b.keep ?? [], workout.segments.length) };
+    const avoid = Array.isArray(b.avoid) ? b.avoid.filter((s): s is string => typeof s === "string").slice(0, 150).map((s) => s.slice(0, 120)) : [];
+    const exactly = Number.isInteger(b.exactly) && (b.exactly as number) >= 1 && (b.exactly as number) <= 5 ? (b.exactly as number) : undefined;
+    input = { workout, genres, eras, vibe, seeds, artistOnly, regenerate, avoid, ...(exactly ? { exactly } : {}), keep: keepTracks(b.keep ?? [], workout.segments.length) };
   } catch (e) {
     return bad(e instanceof SyntaxError ? "Body must be JSON" : (e as Error).message);
   }

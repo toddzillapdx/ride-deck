@@ -45,9 +45,9 @@ const s = (n: number | string) => String(n);
 
 export function newSeg(type: SegType, over: Partial<SegDraft> = {}): SegDraft {
   const base: SegDraft = {
-    key: uid(), type, name: "", cue: "", min: "5", sec: "0", cadMin: "85", cadMax: "95",
+    key: uid(), type, name: "", cue: "", min: "4", sec: "0", cadMin: "85", cadMax: "95",
     role: "steady", effMin: "4", effMax: "5", effFrom: "5", effTo: "8", stepSec: "",
-    workKind: "sprint", ratio: "1:1", workSec: "30", restSec: "30", rounds: "8", adjust: "0",
+    workKind: "sprint", ratio: "1:1", workSec: "30", restSec: "30", rounds: "4", adjust: "0",
     wCadMin: "110", wCadMax: "120", wEffMin: "8", wEffMax: "9", rCadMin: "70", rCadMax: "80", rEffMin: "2", rEffMax: "3",
     songCount: "1",
   };
@@ -59,10 +59,10 @@ export function newSeg(type: SegType, over: Partial<SegDraft> = {}): SegDraft {
 
 export const newFlat = (role: FlatRole, over: Partial<SegDraft> = {}) => {
   const d: Record<FlatRole, Partial<SegDraft>> = {
-    warmup: { name: "Warm-up", min: "5", cadMin: "70", cadMax: "80", effMin: "2", effMax: "3", cue: "Easy spin. You could chat all day." },
-    steady: { name: "Flat road", min: "5", cadMin: "85", cadMax: "95", effMin: "4", effMax: "5", cue: "Find a steady rhythm." },
-    recover: { name: "Recover", min: "2", cadMin: "70", cadMax: "80", effMin: "2", effMax: "3", cue: "Breathe. Let it settle." },
-    cooldown: { name: "Cool-down", min: "5", cadMin: "65", cadMax: "75", effMin: "1", effMax: "2", cue: "Easy spin. Nice work." },
+    warmup: { name: "Warm-up", min: "4", cadMin: "70", cadMax: "80", effMin: "2", effMax: "3", cue: "Easy spin. You could chat all day." },
+    steady: { name: "Flat road", min: "4", cadMin: "85", cadMax: "95", effMin: "4", effMax: "5", cue: "Find a steady rhythm." },
+    recover: { name: "Recover", min: "4", cadMin: "70", cadMax: "80", effMin: "2", effMax: "3", cue: "Breathe. Let it settle." },
+    cooldown: { name: "Cool-down", min: "4", cadMin: "65", cadMax: "75", effMin: "1", effMax: "2", cue: "Easy spin. Nice work." },
   };
   return newSeg("flat", { role, ...d[role], ...over });
 };
@@ -79,8 +79,8 @@ export interface Template { label: string; make: () => SegDraft }
 export const TEMPLATES: Template[] = [
   { label: "Warm-up", make: () => newFlat("warmup") },
   { label: "Cool-down", make: () => newFlat("cooldown") },
-  { label: "Intervals 1:1 · 30/30 x 8", make: () => newSeg("interval", { ...intervalDefaults("resistance"), ratio: "1:1", workSec: "30", restSec: "30", rounds: "8" }) },
-  { label: "Tabata 2:1 · 40/20 x 8", make: () => newSeg("interval", { ...intervalDefaults("sprint"), name: "Tabata", ratio: "2:1", workSec: "40", restSec: "20", rounds: "8" }) },
+  { label: "Intervals 1:1 · 30/30 x 4", make: () => newSeg("interval", { ...intervalDefaults("resistance"), ratio: "1:1", workSec: "30", restSec: "30", rounds: "4" }) },
+  { label: "Tabata 2:1 · 40/20 x 4", make: () => newSeg("interval", { ...intervalDefaults("sprint"), name: "Tabata", ratio: "2:1", workSec: "40", restSec: "20", rounds: "4" }) },
   { label: "Hill 4 min · effort 5 to 8", make: () => newSeg("hill", { min: "4", sec: "0", effFrom: "5", effTo: "8" }) },
 ];
 
@@ -302,4 +302,30 @@ export function applyFit(d: RideDraft): FitOutcome {
     return { ...seg, min: s(Math.floor(f.durationSec / 60)), sec: s(f.durationSec % 60), songCount: s(Math.max(1, count(seg))) };
   });
   return { draft: { ...d, segments }, errors: [], warnings: fit.warnings, unused: fit.unused.length };
+}
+
+
+// ---- the music tab works on the same songs ---------------------------------
+import type { Track } from "./types";
+
+/** The draft's songs as v1-shaped tracks (what the music planner speaks), with their segment. */
+export function tracksFromDraft(d: RideDraft): Track[] {
+  const parts = assignSongs(d);
+  const used = parts.reduce((n, p) => n + p.length, 0);
+  if (parts.length) parts[parts.length - 1] = [...parts[parts.length - 1], ...d.songs.slice(used)];
+  return parts.flatMap((part, i) => part.map(({ key: _k, ...t }): Track => ({ ...t, segmentIndex: i })));
+}
+
+/**
+ * Tracks coming back from the planner replace the draft's songs. A song that was already there keeps its real length;
+ * each segment's song count follows the planner (so a hill or interval ends up with its one song).
+ */
+export function applyTracks(d: RideDraft, tracks: Track[]): RideDraft {
+  const sorted = tracks.map((t, i) => ({ t, i })).sort((a, b) => a.t.segmentIndex - b.t.segmentIndex || a.i - b.i).map((x) => x.t);
+  const songs: SongDraft[] = sorted.map(({ segmentIndex: _s, ...t }) => {
+    const old = d.songs.find((x) => same(x, t));
+    return { ...t, key: old?.key ?? uid(), ...(old?.durationSec !== undefined ? { durationSec: old.durationSec, durationSource: old.durationSource } : {}) };
+  });
+  const counts = d.segments.map((_, i) => sorted.filter((t) => t.segmentIndex === i).length);
+  return { ...d, songs, segments: d.segments.map((seg, i) => ({ ...seg, songCount: String(counts[i]) })) };
 }

@@ -154,7 +154,6 @@ export default function Library() {
               Import JSON
             </button>
             <a href="/history" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">History</a>
-            <a href="/music" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">Plan music</a>
             <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>
           </div>
         </div>
@@ -206,9 +205,8 @@ function Card({ w, mine, onExport, onDelete }: { w: Workout; mine?: boolean; onE
           {fmtClock(totalSeconds(w))} · {w.segments.length} segment{w.segments.length === 1 ? "" : "s"}{climbs ? ` · ${climbs} climb${climbs > 1 ? "s" : ""}` : ""}{sprints ? ` · ${sprints} sprint${sprints > 1 ? "s" : ""}` : ""}
         </span>
         <span className="flex gap-4 text-[13px] font-normal text-mist">
-          {mine && !isPresetId(w.id) && <a href={`/builder/${w.id}`} className="underline underline-offset-4">Edit</a>}
-          <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate</a>
-          <a href={`/music?ride=${w.id}`} className="underline underline-offset-4">Music</a>
+          <a href={`/builder/${w.id}`} className="underline underline-offset-4">Details</a>
+          <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate to edit</a>
           {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="text-ice underline underline-offset-4">Playlist ↗</a>}
           <button onClick={onExport} className="underline underline-offset-4">Export</button>
           <button onClick={onDelete} className="underline underline-offset-4">{mine ? "Delete" : "Remove"}</button>

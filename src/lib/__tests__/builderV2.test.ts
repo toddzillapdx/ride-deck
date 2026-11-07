@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, applyFit, assignSongs, deleteSeg, draftTotals, emptyDraft, fromRide, mergeSongs, moveSeg, newFlat, newSeg, toRide } from "../builderV2";
+import { TEMPLATES, applyFit, applyTracks, tracksFromDraft, assignSongs, deleteSeg, draftTotals, emptyDraft, fromRide, mergeSongs, moveSeg, newFlat, newSeg, toRide } from "../builderV2";
 import { PRESETS_V2 } from "../presetsV2";
 import { parseTracklist, readRide, rideDuration } from "../engine";
 
@@ -18,8 +18,9 @@ describe("builder draft", () => {
     d.name = "t";
     d.segments = TEMPLATES.map((t) => t.make());
     const ride = toRide(d);
-    // warm 5:00, cool 5:00, 30/30 x8 = 8:00, tabata 40/20 x8 = 8:00, hill 4:00
-    expect(rideDuration(ride)).toBe(300 + 300 + 480 + 480 + 240);
+    // every template defaults to 4:00
+    expect(rideDuration(ride)).toBe(5 * 240);
+    expect(ride.segments.map((s) => (s.type === "interval" ? s.rounds : 0))).toEqual([0, 0, 4, 4, 0]);
   });
 
   it("an out-of-range effort names the segment", () => {
@@ -97,5 +98,23 @@ describe("fit explains a shortage", () => {
     const out = applyFit(d);
     expect(out.errors).toHaveLength(1);
     expect(out.errors[0]).toMatch(/needs 3 songs.*You have 1/);
+  });
+});
+
+
+describe("music tab", () => {
+  it("planner tracks replace the songs, keep real lengths, and set each segment's count", () => {
+    const d = emptyDraft();
+    d.segments = [newFlat("warmup"), newSeg("hill")];
+    d.songs = [{ key: "k", title: "Dreams", artist: "Fleetwood Mac", durationSec: 257, durationSource: "manual" }];
+    const out = applyTracks(d, [
+      { segmentIndex: 1, title: "Creep", artist: "Radiohead", approxDurationSec: 238 },
+      { segmentIndex: 0, title: "dreams", artist: "fleetwood mac", approxDurationSec: 250 },
+    ]);
+    expect(out.songs.map((x) => x.title)).toEqual(["dreams", "Creep"]);
+    expect(out.songs[0].durationSec).toBe(257);
+    expect(out.songs[1].durationSec).toBeUndefined();
+    expect(out.segments.map((s) => s.songCount)).toEqual(["1", "1"]);
+    expect(tracksFromDraft(out).map((t) => t.segmentIndex)).toEqual([0, 1]);
   });
 });

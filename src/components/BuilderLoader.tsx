@@ -1,34 +1,47 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Builder, { type BuilderMode } from "./Builder";
+import Builder, { type Tab } from "./Builder";
+import RideDetails from "./RideDetails";
 import Stage from "./Stage";
 import { emptyDraft, fromRide, type RideDraft } from "@/lib/builderV2";
 import { loadRideEx } from "@/lib/client";
-import { isPresetId } from "@/lib/presets";
 
-/** /builder/new, /builder/new?from=<id> (copy), /builder/<id> (edit). Presets open as a copy; a read-only legacy ride opens as an edit that saves a converted copy. */
+/**
+ * /builder/new: a new ride. /builder/new?from=<id>: a duplicate to edit. /builder/<id>: the ride, read-only.
+ * `?tab=music` opens the PLAN MUSIC tab.
+ */
 export default function BuilderLoader({ id }: { id: string }) {
-  const from = useSearchParams().get("from");
-  const [state, setState] = useState<{ draft: RideDraft; mode: BuilderMode } | null>(null);
+  const params = useSearchParams();
+  const from = params.get("from");
+  const tab: Tab = params.get("tab") === "music" ? "music" : "build";
+  const [state, setState] = useState<{ draft: RideDraft; heard: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const sourceId = id === "new" ? from : id;
-    if (!sourceId) return setState({ draft: emptyDraft(), mode: { kind: "new" } });
-    loadRideEx(sourceId)
-      .then(({ ride, legacy }) => {
-        const asCopy = id === "new" || isPresetId(id);
-        const draft = fromRide(ride);
-        if (asCopy) draft.name = `${draft.name} (copy)`;
-        if (legacy && !asCopy) draft.sourceId = sourceId; // the saved copy replaces this original in the library
-        if (asCopy) draft.sourceId = undefined;
-        setState({ draft, mode: asCopy || legacy ? { kind: "new" } : { kind: "edit", id } });
-      })
-      .catch((e: Error) => setError(e.message));
+    if (id !== "new") return;
+    let alive = true;
+    (async () => {
+      try {
+        // Songs already in your other rides, so the planner picks different ones.
+        const heard = await fetch("/api/rides", { cache: "no-store" }).then((r) => r.json())
+          .then((b) => [...new Set(((b.rides ?? []) as { id: string; tracklist?: { title: string }[] }[]).filter((w) => w.id !== from).flatMap((w) => (w.tracklist ?? []).map((t) => t.title)))].slice(0, 120))
+          .catch(() => [] as string[]);
+        let draft = emptyDraft();
+        if (from) {
+          const { ride } = await loadRideEx(from);
+          draft = fromRide(ride);
+          draft.name = `${draft.name} (copy)`;
+          draft.sourceId = undefined; // a duplicate is its own ride: it does not replace the original
+        }
+        if (alive) setState({ draft, heard });
+      } catch (e) { if (alive) setError((e as Error).message); }
+    })();
+    return () => { alive = false; };
   }, [id, from]);
 
-  if (state) return <Builder initial={state.draft} mode={state.mode} />;
+  if (id !== "new") return <RideDetails id={id} />;
+  if (state) return <Builder initial={state.draft} tab={tab} heard={state.heard} />;
   return (
     <Stage bg="#002A33">
       <div className="flex h-full flex-col items-center justify-center gap-6 text-center">
