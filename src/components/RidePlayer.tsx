@@ -6,7 +6,8 @@ import {
 import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
 import { useLayout } from "@/lib/useLayout";
-import RideView, { ChangeView, Countdown321, SAFE, type RideViewData } from "./RideView";
+import RideView, { ChangeView, Countdown321, SAFE } from "./RideView";
+import { countdownInfo, type RideViewData } from "@/lib/rideLabels";
 import { FLIP_BG, FLIP_FG, REST_BG, REST_FG, WARN_SEC, WORK_BG, WORK_FG, GROUND, ICE } from "@/lib/rideTheme";
 import EffortGuide from "./EffortGuide";
 import TapBanner from "./TapBanner";
@@ -122,12 +123,16 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
 
   // Screen Wake Lock: best effort, fail silently. The tap prompt is the fallback.
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
+  // Only when the phone will not keep the screen awake does the "tap the screen" reminder appear. Otherwise it never shows.
+  const [lockOk, setLockOk] = useState(true);
   const acquire = useCallback(async () => {
     try {
       const wl = (navigator as unknown as { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } }).wakeLock;
-      if (wl) lock.current = await wl.request("screen");
+      if (!wl) return setLockOk(false);
+      lock.current = await wl.request("screen");
+      setLockOk(true);
     } catch {
-      /* ignore */
+      setLockOk(false);
     }
   }, []);
   useEffect(() => {
@@ -212,16 +217,17 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
   const { now, next } = trackAt(ride, elapsed);
   const v: RideViewData = {
     ride, phases, idx: pos.index, segStarts: starts, segDurations: durations, elapsed, total,
-    phaseLeft: pos.phaseLeftSec, tapIn: Math.max(0, nextPrompt - rawElapsed), now, next,
+    phaseLeft: pos.phaseLeftSec, now, next,
   };
 
   // The flip: only in the last WARN_SEC of the LAST phase of a segment (so never between hill steps
   // or between an interval's work and rest), and only if something follows.
   const lastOfSegment = !!pos.next && pos.next.segmentIndex !== segIndex;
   const warning = stage === "riding" && !pos.done && lastOfSegment && pos.phaseLeftSec <= WARN_SEC;
-  const showTap = (stage === "riding" || stage === "stretch") && !warning && rawElapsed >= nextPrompt;
+  const showTap = (stage === "riding" || stage === "stretch") && !lockOk && !warning && rawElapsed >= nextPrompt;
 
   const inInterval = stage === "riding" && !warning && (pos.phase.kind === "work" || pos.phase.kind === "rest");
+  const count = stage === "riding" && !warning ? countdownInfo(v) : null;
   const bg = warning ? FLIP_BG : inInterval ? (pos.phase.kind === "work" ? WORK_BG : REST_BG) : REST_BG;
   const fgc = warning ? FLIP_FG : inInterval ? (pos.phase.kind === "work" ? WORK_FG : REST_FG) : REST_FG;
 
@@ -245,6 +251,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
               <button onClick={() => setGuide(true)} className="flex h-[52px] items-center rounded-full border-2 border-line px-5 text-[16px] font-medium text-ice">Effort guide</button>
               <a href="/" className="flex h-[52px] items-center px-2 text-[14px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
             </div>
+            <span className="max-w-[320px] text-[14px] font-light leading-snug text-mist">Tip: keep your screen awake. On iPhone: Settings › Display &amp; Brightness › Auto-Lock › Never.</span>
             {speed !== 1 && <span className="text-[14px] text-mist">Test mode: {speed}x clock</span>}
           </div>
         )}
@@ -257,7 +264,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
           </div>
         ))}
 
-        {inInterval && !showTap && !menu && clock.running && !guide && <Countdown321 phase={pos.phase} left={pos.phaseLeftSec} />}
+        {count && !showTap && !menu && clock.running && !guide && <Countdown321 info={count} />}
         {showTap && <TapBanner ignoredSec={rawElapsed - nextPrompt} compact />}
         {stage === "riding" && menu && clock.running && (
           <div className="fixed inset-0 z-30 flex items-center justify-center bg-ground/90 p-4" onClick={() => setMenu(false)}>
