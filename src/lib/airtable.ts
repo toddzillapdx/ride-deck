@@ -1,6 +1,7 @@
 import { parseWorkout } from "./validate";
 import { parseLogInput, type LogInput, type LogPatch, type RideLog } from "./history";
 import { totalSeconds } from "./presets";
+import { readRide, rideToLegacyWorkout } from "./engine";
 import type { Workout } from "./types";
 
 /** Server-side only. The token never reaches the browser. */
@@ -56,7 +57,18 @@ export function toFields(w: Workout, now = new Date()) {
 export function fromRecord(r: AtRecord): Workout {
   const raw = r.fields.WorkoutJson;
   if (typeof raw !== "string") throw new Error(`Record ${r.id} has no WorkoutJson`);
-  const w = parseWorkout(JSON.parse(raw));
+  const json = JSON.parse(raw) as Record<string, unknown>;
+  let w: Workout;
+  if (json.schemaVersion === 2) {
+    // A v2 ride, shown to the (v1-shaped) library, builder and music planner through the interim adapter.
+    // Riding reads the raw JSON instead, so nothing is lost; saving it back through the old builder is refused (see isV2).
+    const v2 = readRide(json).ride;
+    w = parseWorkout({
+      ...rideToLegacyWorkout(v2),
+      genre: v2.genre, vibe: v2.vibe, eras: v2.eras, genres: v2.genres, seeds: v2.seeds, artistOnly: v2.artistOnly, playlistUrl: v2.playlistUrl,
+      tracklist: v2.tracklist?.map((t) => ({ ...t, approxDurationSec: t.durationSec ?? t.approxDurationSec })),
+    });
+  } else w = parseWorkout(json);
   // Name and PlaylistUrl can be edited directly in Airtable; those edits win.
   if (typeof r.fields.Name === "string" && r.fields.Name.trim()) w.name = r.fields.Name.trim();
   if (typeof r.fields.PlaylistUrl === "string") w.playlistUrl = r.fields.PlaylistUrl || undefined;
@@ -64,10 +76,17 @@ export function fromRecord(r: AtRecord): Workout {
   return w;
 }
 
+/** True when the stored record is a v2 ride. The old (v1) builder must not overwrite it. */
+export async function isV2(id: string): Promise<boolean> {
+  return (await getRideRaw(id)).schemaVersion === 2;
+}
+
 export async function listRides(): Promise<{ rides: Workout[]; skipped: string[] }> {
   const rides: Workout[] = [];
   const skipped: string[] = [];
+  const replaced = new Set<string>(); // legacy ids that already have a converted copy in the main table
   for (const table of hasLegacy() ? [TABLE, LEGACY] : [TABLE]) {
+    const legacy = table === LEGACY && hasLegacy();
     let offset: string | undefined;
     do {
       const q = new URLSearchParams({ pageSize: "100", "sort[0][field]": "UpdatedAt", "sort[0][direction]": "desc" });
@@ -75,7 +94,13 @@ export async function listRides(): Promise<{ rides: Workout[]; skipped: string[]
       const page = await call(`${table}?${q}`);
       for (const r of page.records as AtRecord[]) {
         if (r.fields.Name === SETTINGS_NAME) continue; // app settings, not a ride
-        try { rides.push(fromRecord(r)); } catch { skipped.push(r.id); }
+        if (legacy && replaced.has(r.id)) continue;
+        try {
+          if (!legacy) {
+            try { const s = JSON.parse(String(r.fields.WorkoutJson ?? "{}")).sourceId; if (typeof s === "string") replaced.add(s); } catch { /* ignore */ }
+          }
+          rides.push(fromRecord(r));
+        } catch { skipped.push(r.id); }
       }
       offset = page.offset;
     } while (offset);

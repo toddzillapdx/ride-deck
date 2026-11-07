@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, deleteRide, getRide, getRideRaw, updateRide } from "@/lib/airtable";
+import { AirtableNotConfigured, deleteRide, getRide, getRideRaw, isV2, updateRide } from "@/lib/airtable";
 import { getPreset, isPresetId } from "@/lib/presets";
 import { parseWorkout } from "@/lib/validate";
 
@@ -27,7 +27,11 @@ export async function PUT(req: Request, { params }: Ctx) {
   if (isPresetId(params.id)) return NextResponse.json({ error: "Presets are read-only. Duplicate it first." }, { status: 403 });
   let workout;
   try { workout = parseWorkout(await req.json()); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
-  try { return NextResponse.json(await updateRide(params.id, workout)); } catch (e) { return fail(e); }
+  try {
+    // The old builder only understands v1. Saving would flatten a v2 ride's intervals and effort, so refuse until the builder is rebuilt.
+    if (await isV2(params.id)) return NextResponse.json({ error: "This ride uses the new format. The builder is being rebuilt, so it can't be edited here yet." }, { status: 409 });
+    return NextResponse.json(await updateRide(params.id, workout));
+  } catch (e) { return fail(e); }
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {

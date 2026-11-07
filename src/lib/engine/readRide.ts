@@ -103,7 +103,7 @@ export function parseRideV2(input: unknown): Ride {
   if (playlistUrl && !/^https?:\/\//i.test(playlistUrl)) throw new Error("playlistUrl must start with http:// or https://");
 
   return {
-    schemaVersion: 2, id: typeof o.id === "string" ? o.id : "", name: str(o.name)!,
+    schemaVersion: 2, id: typeof o.id === "string" ? o.id : "", sourceId: str(o.sourceId), name: str(o.name)!,
     genre: str(o.genre), vibe: str(o.vibe), eras: list(o.eras, 20), genres: list(o.genres, 30),
     seeds: typeof o.seeds === "string" && o.seeds.trim() ? o.seeds.trim().slice(0, 300) : undefined,
     artistOnly: o.artistOnly === true ? true : undefined, playlistUrl, segments, tracklist, stretches,
