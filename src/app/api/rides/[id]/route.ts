@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, deleteRide, getRide, updateRide } from "@/lib/airtable";
+import { AirtableNotConfigured, deleteRide, getRide, getRideRaw, updateRide } from "@/lib/airtable";
 import { getPreset, isPresetId } from "@/lib/presets";
 import { parseWorkout } from "@/lib/validate";
 
@@ -11,7 +11,11 @@ const fail = (e: unknown) =>
     ? NextResponse.json({ error: e.message }, { status: 503 })
     : NextResponse.json({ error: (e as Error).message }, { status: /Airtable 404/.test((e as Error).message) ? 404 : 502 });
 
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
+  // ?format=raw: the stored JSON untouched (v1 or v2). The ride screen converts v1 itself.
+  if (!isPresetId(params.id) && new URL(req.url).searchParams.get("format") === "raw") {
+    try { return NextResponse.json(await getRideRaw(params.id)); } catch (e) { return fail(e); }
+  }
   if (isPresetId(params.id)) {
     const p = getPreset(params.id);
     return p ? NextResponse.json(p) : NextResponse.json({ error: "Not found" }, { status: 404 });

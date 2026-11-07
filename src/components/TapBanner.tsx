@@ -9,7 +9,7 @@ export default function TapBanner({ ignoredSec, compact }: { ignoredSec: number;
         <div className={`flex w-full flex-col items-center justify-center gap-1 rounded-[24px] bg-ice px-4 py-3 text-center text-ground ${insistent ? "tap-pulse" : ""}`}>
           <HandIcon size={28} color="#002A33" stroke={1.8} />
           <span className="font-light uppercase leading-none" style={{ fontSize: "min(9dvh, 8vw)", letterSpacing: ".02em" }}>Tap the screen</span>
-          <span className="text-[12px] font-normal">Keeps your phone awake. Your ride keeps running.</span>
+          <span className="text-[14px] font-normal">Keeps your phone awake. Your ride keeps running.</span>
         </div>
       </div>
     );

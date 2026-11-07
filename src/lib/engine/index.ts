@@ -7,3 +7,5 @@ export * from "./fit";
 export * from "./convertV1";
 export * from "./readRide";
 export * from "./clockCore";
+export * from "./songs";
+export * from "./legacy";

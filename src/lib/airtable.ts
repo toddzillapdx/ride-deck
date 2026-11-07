@@ -5,7 +5,10 @@ import type { Workout } from "./types";
 
 /** Server-side only. The token never reaches the browser. */
 const API = "https://api.airtable.com/v0";
-const TABLE = "Rides";
+/** Preview deploys point TABLE at RidesV2 and LEGACY at the original Rides table, which is read-only. */
+const TABLE = process.env.AIRTABLE_RIDES_TABLE || "Rides";
+const LEGACY = process.env.AIRTABLE_LEGACY_RIDES_TABLE || "";
+const hasLegacy = () => Boolean(LEGACY) && LEGACY !== TABLE;
 /** App settings live in one reserved row of the Rides table, so no extra table or token scope is needed. */
 export const SETTINGS_NAME = "__settings__";
 
@@ -64,22 +67,46 @@ export function fromRecord(r: AtRecord): Workout {
 export async function listRides(): Promise<{ rides: Workout[]; skipped: string[] }> {
   const rides: Workout[] = [];
   const skipped: string[] = [];
-  let offset: string | undefined;
-  do {
-    const q = new URLSearchParams({ pageSize: "100", "sort[0][field]": "UpdatedAt", "sort[0][direction]": "desc" });
-    if (offset) q.set("offset", offset);
-    const page = await call(`${TABLE}?${q}`);
-    for (const r of page.records as AtRecord[]) {
-      if (r.fields.Name === SETTINGS_NAME) continue; // app settings, not a ride
-      try { rides.push(fromRecord(r)); } catch { skipped.push(r.id); }
-    }
-    offset = page.offset;
-  } while (offset);
+  for (const table of hasLegacy() ? [TABLE, LEGACY] : [TABLE]) {
+    let offset: string | undefined;
+    do {
+      const q = new URLSearchParams({ pageSize: "100", "sort[0][field]": "UpdatedAt", "sort[0][direction]": "desc" });
+      if (offset) q.set("offset", offset);
+      const page = await call(`${table}?${q}`);
+      for (const r of page.records as AtRecord[]) {
+        if (r.fields.Name === SETTINGS_NAME) continue; // app settings, not a ride
+        try { rides.push(fromRecord(r)); } catch { skipped.push(r.id); }
+      }
+      offset = page.offset;
+    } while (offset);
+  }
   return { rides, skipped };
 }
 
+/** The record, from the main table or (read-only) the legacy one. */
+async function findRecord(id: string): Promise<AtRecord> {
+  try {
+    return await call(`${TABLE}/${encodeURIComponent(id)}`);
+  } catch (e) {
+    if (hasLegacy() && /Airtable (404|422)/.test((e as Error).message)) return call(`${LEGACY}/${encodeURIComponent(id)}`);
+    throw e;
+  }
+}
+
 export async function getRide(id: string): Promise<Workout> {
-  return fromRecord(await call(`${TABLE}/${encodeURIComponent(id)}`));
+  return fromRecord(await findRecord(id));
+}
+
+/** The stored ride JSON as-is (v1 or v2), with the id and the Airtable-editable fields applied. The client converts v1. */
+export async function getRideRaw(id: string): Promise<Record<string, unknown>> {
+  const r = await findRecord(id);
+  const raw = r.fields.WorkoutJson;
+  if (typeof raw !== "string") throw new Error(`Record ${r.id} has no WorkoutJson`);
+  const o = JSON.parse(raw) as Record<string, unknown>;
+  if (typeof r.fields.Name === "string" && r.fields.Name.trim()) o.name = r.fields.Name.trim();
+  if (typeof r.fields.PlaylistUrl === "string") o.playlistUrl = r.fields.PlaylistUrl || undefined;
+  o.id = r.id;
+  return o;
 }
 
 export async function createRide(w: Workout): Promise<Workout> {
@@ -171,14 +198,15 @@ export interface AppSettings {
   hiddenPresets: string[];
 }
 
-async function settingsRecord(): Promise<AtRecord | undefined> {
+async function settingsRecord(table = TABLE): Promise<AtRecord | undefined> {
   const q = new URLSearchParams({ filterByFormula: `{Name}="${SETTINGS_NAME}"`, maxRecords: "1" });
-  const page = await call(`${TABLE}?${q}`);
+  const page = await call(`${table}?${q}`);
   return (page.records as AtRecord[])[0];
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  const rec = await settingsRecord();
+  // A preview with no settings row of its own starts from the original (read-only) one.
+  const rec = (await settingsRecord()) ?? (hasLegacy() ? await settingsRecord(LEGACY) : undefined);
   try {
     const o = JSON.parse(String(rec?.fields.WorkoutJson ?? "{}"));
     return { hiddenPresets: Array.isArray(o.hiddenPresets) ? o.hiddenPresets.filter((x: unknown): x is string => typeof x === "string") : [] };
