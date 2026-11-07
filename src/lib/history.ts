@@ -7,8 +7,15 @@ export interface SegSnapshot {
   type: SegmentType;
   durationSec: number;
   cadence?: Target;
+  /** v1 rides only: resistance 0-100. Shown as effort (resistance / 10) so old and new rides read the same. */
   resistance?: Target;
+  /** v2 rides: effort 1-10. */
+  effort?: Target;
 }
+
+const tenth = (t: Target): Target => (Array.isArray(t) ? [Math.max(1, Math.round(t[0] / 10)), Math.max(1, Math.round(t[1] / 10))] : Math.max(1, Math.round(t / 10)));
+/** Effort for a snapshot, new or old. */
+export const snapshotEffort = (s: SegSnapshot): Target | undefined => s.effort ?? (s.resistance === undefined ? undefined : tenth(s.resistance));
 
 export interface RideLog {
   id: string;
@@ -83,7 +90,11 @@ export function parseLogInput(raw: unknown): LogInput {
     segmentsTotal,
     ...(kcal === null ? {} : { kcal }),
     ...(notes ? { notes } : {}),
-    segments: snapshot(w),
+    segments: snapshot(w).map((seg, i) => {
+      const e = (o.segments as { effort?: unknown }[])[i]?.effort;
+      const ok = (n: unknown) => typeof n === "number" && n >= 1 && n <= 10;
+      return Array.isArray(e) && e.length === 2 && ok(e[0]) && ok(e[1]) ? { ...seg, effort: [e[0], e[1]] as [number, number] } : ok(e) ? { ...seg, effort: e as number } : seg;
+    }),
   };
 }
 

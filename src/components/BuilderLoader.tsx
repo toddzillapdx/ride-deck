@@ -3,25 +3,27 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Builder, { type BuilderMode } from "./Builder";
 import Stage from "./Stage";
-import { emptyDraft, fromWorkout, type WorkoutDraft } from "@/lib/builder";
-import { loadWorkout } from "@/lib/client";
+import { emptyDraft, fromRide, type RideDraft } from "@/lib/builderV2";
+import { loadRideEx } from "@/lib/client";
 import { isPresetId } from "@/lib/presets";
 
-/** /builder/new, /builder/new?from=<id> (copy), /builder/<id> (edit). Presets always open as a copy. */
+/** /builder/new, /builder/new?from=<id> (copy), /builder/<id> (edit). Presets open as a copy; a read-only legacy ride opens as an edit that saves a converted copy. */
 export default function BuilderLoader({ id }: { id: string }) {
   const from = useSearchParams().get("from");
-  const [state, setState] = useState<{ draft: WorkoutDraft; mode: BuilderMode } | null>(null);
+  const [state, setState] = useState<{ draft: RideDraft; mode: BuilderMode } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const sourceId = id === "new" ? from : id;
     if (!sourceId) return setState({ draft: emptyDraft(), mode: { kind: "new" } });
-    loadWorkout(sourceId)
-      .then((w) => {
+    loadRideEx(sourceId)
+      .then(({ ride, legacy }) => {
         const asCopy = id === "new" || isPresetId(id);
-        const draft = fromWorkout(w);
+        const draft = fromRide(ride);
         if (asCopy) draft.name = `${draft.name} (copy)`;
-        setState({ draft, mode: asCopy ? { kind: "new" } : { kind: "edit", id } });
+        if (legacy && !asCopy) draft.sourceId = sourceId; // the saved copy replaces this original in the library
+        if (asCopy) draft.sourceId = undefined;
+        setState({ draft, mode: asCopy || legacy ? { kind: "new" } : { kind: "edit", id } });
       })
       .catch((e: Error) => setError(e.message));
   }, [id, from]);

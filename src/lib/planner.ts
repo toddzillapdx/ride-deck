@@ -36,6 +36,9 @@ export interface SegmentNeed {
   cue: string;
 }
 
+/** The workout is v1-shaped here (resistance 0-100). The planner is told effort 1-10 instead. */
+const fmtEffort = (t: Workout["segments"][number]["resistance"]) =>
+  t === undefined ? undefined : Array.isArray(t) ? `${Math.max(1, Math.round(t[0] / 10))}-${Math.max(1, Math.round(t[1] / 10))}` : `${Math.max(1, Math.round(t / 10))}`;
 const fmt = (t: Workout["segments"][number]["cadence"]) => (t === undefined ? undefined : Array.isArray(t) ? `${t[0]}-${t[1]}` : `${t}`);
 
 export function segmentNeeds(input: PlanInput): SegmentNeed[] {
@@ -46,7 +49,7 @@ export function segmentNeeds(input: PlanInput): SegmentNeed[] {
     const kept = input.keep.filter((t) => t.segmentIndex === i).reduce((n, t) => n + songSec(t), 0);
     const needSec = Math.max(0, s.durationSec - kept);
     if (kept > 0 && needSec < 45) continue; // already full
-    out.push({ segmentIndex: i, name: s.name, type: s.type, durationSec: s.durationSec, needSec, cadence: fmt(s.cadence), resistance: fmt(s.resistance), cue: s.cue });
+    out.push({ segmentIndex: i, name: s.name, type: s.type, durationSec: s.durationSec, needSec, cadence: fmt(s.cadence), resistance: fmtEffort(s.resistance), cue: s.cue });
   }
   return out;
 }
@@ -60,12 +63,12 @@ const VIBE_NOTES: Record<string, string> = {
 
 export const SYSTEM_PROMPT = `You build cycling playlists for a stationary-bike ride coach.
 
-You are given the segments of one ride (type, length, target cadence in RPM, target resistance 0-100). Pick real songs to pace each segment.
+You are given the segments of one ride (type, length, target cadence in RPM, target effort 1-10, judged by feel). Pick real songs to pace each segment.
 
 Pacing:
 - warmup, recover and cooldown segments want slower, steadier songs.
 - flat segments want a steady mid-tempo groove.
-- climb segments are heavy and slow and add resistance every minute: pick songs with a heavy, deliberate, driving feel. Tempos near the target cadence, or double it, work well.
+- climb (hill) segments are heavy and slow and add effort in steps: pick songs with a heavy, deliberate, driving feel. Tempos near the target cadence, or double it, work well.
 - sprint segments want the fastest, most explosive songs. They are ridden as one minute hard and one minute easy for the whole song, so a clear, steady beat that is easy to count in minutes works best.
 - Songs should roughly fill the time needed for each segment. A song may be 3 to 5 minutes. Use one song for a segment of 3 to 6 minutes and more for longer ones.
 - Segments under about 2 minutes do not need their own song. Return no tracks for them when the previous song can carry through.
@@ -108,7 +111,7 @@ export function buildUserMessage(input: PlanInput, needs: SegmentNeed[]): string
   for (const n of needs) {
     lines.push(
       `- segmentIndex ${n.segmentIndex}: ${n.name}, type ${n.type}, ${n.durationSec}s long, needs about ${n.needSec}s of songs` +
-        `${n.cadence ? `, cadence ${n.cadence} RPM` : ""}${n.resistance ? `, resistance ${n.resistance}` : ""}${n.cue ? `, cue: "${n.cue}"` : ""}`,
+        `${n.cadence ? `, cadence ${n.cadence} RPM` : ""}${n.resistance ? `, effort ${n.resistance}` : ""}${n.cue ? `, cue: "${n.cue}"` : ""}`,
     );
   }
   if (input.keep.length) {

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildPhases, phaseAt, resolveSpeed, rideDuration, rideToLegacyWorkout, segmentDuration, segmentStarts, trackAt, type Ride,
+  buildPhases, phaseAt, resolveSpeed, rideDuration, rideSnapshot, segmentDuration, segmentStarts, trackAt, type Ride,
 } from "@/lib/engine";
 import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
@@ -12,7 +12,7 @@ import EffortGuide from "./EffortGuide";
 import TapBanner from "./TapBanner";
 import { CaloriesScreen, StretchScreen, SummaryScreen, type SaveStatus } from "./PostRide";
 import { patchLog, postLog, HistoryOff } from "@/lib/historyClient";
-import { snapshot, type RideLog } from "@/lib/history";
+import type { RideLog } from "@/lib/history";
 import PauseOverlay from "./PauseOverlay";
 import { BigButton, CtlButton, HoldButton } from "./RideControls";
 import { NoteIcon } from "./Icons";
@@ -90,7 +90,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
   // History helpers ------------------------------------------------------
   const payload = (extra: Record<string, unknown>) => ({
     rideId: ride.id, rideName: ride.name, startedAt: startedAtRef.current || new Date().toISOString(),
-    plannedSec: Math.round(total), segments: snapshot(rideToLegacyWorkout(ride) as never), ...extra,
+    plannedSec: Math.round(total), segments: rideSnapshot(ride), ...extra,
   });
   const note = (e: unknown) => setSaveStatus(e instanceof HistoryOff ? "off" : { error: (e as Error).message });
   const startLog = (extra: Record<string, unknown>) => {

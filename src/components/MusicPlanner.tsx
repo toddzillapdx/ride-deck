@@ -10,6 +10,7 @@ import {
   ERAS, GENRES, VIBES, amazonSearchUrl, mergeTracks, playlistSeconds, spreadCounts, styleForSave, styleFromWorkout, styleSummary, toCsv, toPlaylistPrompt, toText,
 } from "@/lib/music";
 import type { Segment, Track, Workout } from "@/lib/types";
+import { getPresetV2 } from "@/lib/presetsV2";
 
 type UiTrack = Track & { key: string; locked?: boolean };
 let n = 0;
@@ -128,10 +129,14 @@ export default function MusicPlanner() {
   async function save() {
     setSaving(true); setMsg(null);
     const link = extractUrl(playlistUrl) || playlistUrl.trim();
-    const body = { ...workout, genre: styleForSave({ eras, genres, artistOnly: onlyArtist, seeds }) || undefined, eras, genres, seeds: seeds.trim() || undefined, artistOnly: onlyArtist || undefined, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
+    const meta = { genre: styleForSave({ eras, genres, artistOnly: onlyArtist, seeds }) || undefined, eras, genres, seeds: seeds.trim() || undefined, artistOnly: onlyArtist || undefined, vibe, playlistUrl: link || undefined, tracklist: tracks.map(strip) };
     const preset = isPresetId(workout.id);
     try {
-      const res = await fetch(preset ? "/api/rides" : `/api/rides/${workout.id}`, { method: preset ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      // Only the music changes: segments are never rewritten from here (a v2 ride would lose its intervals and hills).
+      const starter = preset ? getPresetV2(workout.id) : undefined;
+      const res = preset
+        ? await fetch("/api/rides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(starter ?? { schemaVersion: 2, name: workout.name, segments: [] }), id: "", ...meta }) })
+        : await fetch(`/api/rides/${workout.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(meta) });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: res.status === 503 ? "Airtable isn't connected, so the tracklist can't be saved." : out.error ?? `Save failed (${res.status})` }); return; }
       const w = out as Workout;

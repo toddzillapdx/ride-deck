@@ -1,7 +1,7 @@
 import { parseWorkout } from "./validate";
 import { parseLogInput, type LogInput, type LogPatch, type RideLog } from "./history";
 import { totalSeconds } from "./presets";
-import { readRide, rideToLegacyWorkout } from "./engine";
+import { parseRideV2, readRide, rideDuration, rideToLegacyWorkout, type Ride } from "./engine";
 import type { Workout } from "./types";
 
 /** Server-side only. The token never reaches the browser. */
@@ -66,7 +66,7 @@ export function fromRecord(r: AtRecord): Workout {
     w = parseWorkout({
       ...rideToLegacyWorkout(v2),
       genre: v2.genre, vibe: v2.vibe, eras: v2.eras, genres: v2.genres, seeds: v2.seeds, artistOnly: v2.artistOnly, playlistUrl: v2.playlistUrl,
-      tracklist: v2.tracklist?.map((t) => ({ ...t, approxDurationSec: t.durationSec ?? t.approxDurationSec })),
+      tracklist: v2.tracklist,
     });
   } else w = parseWorkout(json);
   // Name and PlaylistUrl can be edited directly in Airtable; those edits win.
@@ -108,12 +108,12 @@ export async function listRides(): Promise<{ rides: Workout[]; skipped: string[]
   return { rides, skipped };
 }
 
-/** The record, from the main table or (read-only) the legacy one. */
-async function findRecord(id: string): Promise<AtRecord> {
+/** The record, from the main table or (read-only) the legacy one. `legacy` says which. */
+async function findRecord(id: string): Promise<AtRecord & { legacy?: boolean }> {
   try {
     return await call(`${TABLE}/${encodeURIComponent(id)}`);
   } catch (e) {
-    if (hasLegacy() && /Airtable (404|422)/.test((e as Error).message)) return call(`${LEGACY}/${encodeURIComponent(id)}`);
+    if (hasLegacy() && /Airtable (404|422)/.test((e as Error).message)) return { ...(await call(`${LEGACY}/${encodeURIComponent(id)}`)), legacy: true };
     throw e;
   }
 }
@@ -131,6 +131,8 @@ export async function getRideRaw(id: string): Promise<Record<string, unknown>> {
   if (typeof r.fields.Name === "string" && r.fields.Name.trim()) o.name = r.fields.Name.trim();
   if (typeof r.fields.PlaylistUrl === "string") o.playlistUrl = r.fields.PlaylistUrl || undefined;
   o.id = r.id;
+  // Tell the builder this one is read-only (a save has to make a converted copy instead).
+  if (r.legacy) o.__legacy = true;
   return o;
 }
 
@@ -144,6 +146,43 @@ export async function updateRide(id: string, w: Workout): Promise<Workout> {
 
 export async function deleteRide(id: string): Promise<void> {
   await call(`${TABLE}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** Fields written for a v2 ride. WorkoutJson is the source of truth; the rest are for browsing in Airtable. */
+export function toFieldsV2(r: Ride, now = new Date()) {
+  const { id: _id, ...rest } = r;
+  return {
+    Name: r.name, Genre: r.genre ?? "", Vibe: r.vibe ?? "", PlaylistUrl: r.playlistUrl ?? null,
+    TotalSeconds: rideDuration(r), WorkoutJson: JSON.stringify(rest), UpdatedAt: now.toISOString(),
+  };
+}
+
+export async function createRideV2(r: Ride): Promise<Workout> {
+  return fromRecord(await call(TABLE, { method: "POST", body: JSON.stringify({ fields: toFieldsV2(r) }) }));
+}
+
+export async function updateRideV2(id: string, r: Ride): Promise<Workout> {
+  return fromRecord(await call(`${TABLE}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ fields: toFieldsV2(r) }) }));
+}
+
+/** The parts of a ride the music planner edits. Everything else (the segments) is left exactly as stored. */
+export interface RideMeta {
+  tracklist?: Ride["tracklist"];
+  playlistUrl?: string;
+  genre?: string; vibe?: string; eras?: string[]; genres?: string[]; seeds?: string; artistOnly?: boolean;
+}
+
+/**
+ * Saves music-planner changes without touching the segments. A v2 ride is updated in place. A v1 ride is converted
+ * first; if it lives in the read-only legacy table the converted copy is created in the main table (with sourceId).
+ */
+export async function patchRideMeta(id: string, meta: RideMeta): Promise<Workout> {
+  const rec = await findRecord(id);
+  const raw = JSON.parse(String(rec.fields.WorkoutJson ?? "{}")) as Record<string, unknown>;
+  if (typeof rec.fields.Name === "string" && rec.fields.Name.trim()) raw.name = rec.fields.Name.trim();
+  const base = readRide({ ...raw, id: rec.id }).ride;
+  const next: Ride = parseRideV2({ ...base, ...meta, id: rec.legacy || raw.schemaVersion !== 2 ? "" : rec.id, sourceId: rec.legacy ? rec.id : base.sourceId });
+  return rec.legacy ? createRideV2(next) : updateRideV2(id, next);
 }
 
 // ---- Ride history (RideLog table) ----

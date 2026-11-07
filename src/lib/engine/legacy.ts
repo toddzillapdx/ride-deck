@@ -4,9 +4,8 @@ import type { Ride, Target } from "./types";
 type V1Type = "warmup" | "flat" | "climb" | "sprint" | "recover" | "cooldown";
 
 /**
- * INTERIM. History and its charts still speak v1 (resistance 0-100) until the History rework.
- * This maps a v2 ride to that shape, with effort x 10 standing in for resistance, so a finished
- * ride can still be logged. Not used for riding.
+ * INTERIM. The library, planner and old screens still speak the v1 shape (resistance x10). This maps a v2 ride to it,
+ * with effort x 10 standing in for resistance. Not used for riding or History (see rideSnapshot).
  */
 export function rideToLegacyWorkout(ride: Ride) {
   const x10 = (e: Target): Target => (Array.isArray(e) ? [e[0] * 10, e[1] * 10] : e * 10);
@@ -24,4 +23,16 @@ export function rideToLegacyWorkout(ride: Ride) {
       return { name: s.name, type: "sprint" as V1Type, durationSec: segmentDuration(s), cadence: s.work.cadence, resistance: x10(s.work.effort), cue: s.cue };
     }),
   };
+}
+
+/**
+ * What History keeps of a v2 ride: one entry per segment with its cadence and effort (1-10).
+ * `type` uses the v1 names so the log validator and chart colors keep working.
+ */
+export function rideSnapshot(ride: Ride) {
+  return ride.segments.map((s) => {
+    if (s.type === "flat") return { name: s.name, type: (s.role === "steady" ? "flat" : s.role) as V1Type, durationSec: s.durationSec, cadence: s.cadence, effort: s.effort };
+    if (s.type === "hill") return { name: s.name, type: "climb" as V1Type, durationSec: s.durationSec, cadence: s.cadence, effort: [s.effortFrom, s.effortTo] as Target };
+    return { name: s.name, type: "sprint" as V1Type, durationSec: segmentDuration(s), cadence: s.work.cadence, effort: s.work.effort };
+  });
 }

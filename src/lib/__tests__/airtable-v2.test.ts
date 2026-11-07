@@ -17,7 +17,7 @@ describe("v2 records in the library path", () => {
     const w = fromRecord({ id: "recNEW", fields: { Name: "X", WorkoutJson: JSON.stringify(v2) } });
     expect(w.id).toBe("recNEW");
     expect(w.segments.reduce((t, s) => t + s.durationSec, 0)).toBe(rideDuration(readRide(v2).ride));
-    expect(w.tracklist?.[0].approxDurationSec).toBe(200);
+    expect(w.tracklist?.[0].durationSec).toBe(200);
   });
   it("sourceId survives a strict re-read", () => {
     expect(readRide(v2).ride.sourceId).toBe("recOLD");
