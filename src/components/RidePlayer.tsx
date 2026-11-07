@@ -6,7 +6,8 @@ import {
 import { useRideClock } from "@/lib/rideClock";
 import { fmtClock } from "@/lib/format";
 import { useLayout } from "@/lib/useLayout";
-import RideView, { ChangeView, GROUND, ICE, INK, SAFE, type RideViewData } from "./RideView";
+import RideView, { ChangeView, Countdown321, SAFE, type RideViewData } from "./RideView";
+import { FLIP_BG, FLIP_FG, REST_BG, REST_FG, WARN_SEC, WORK_BG, WORK_FG, GROUND, ICE } from "@/lib/rideTheme";
 import EffortGuide from "./EffortGuide";
 import TapBanner from "./TapBanner";
 import FinishScreen from "./FinishScreen";
@@ -17,8 +18,6 @@ import { NoteIcon } from "./Icons";
 const TAP_EVERY = 600; // tap prompt cadence (seconds of ride time)
 const STORE_KEY = "ridedeck-active-ride";
 const STALE_MS = 6 * 3600 * 1000;
-/** The last this-many seconds of a segment flip the screen (only at a segment boundary). */
-export const WARN_SEC = 10;
 
 type Stage = "ready" | "riding" | "done";
 
@@ -162,12 +161,16 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
   const showTap = stage === "riding" && !warning && elapsed >= nextPrompt;
   const endedEarly = clock.elapsedMs / 1000 < total - 0.5;
 
+  const inInterval = stage === "riding" && !warning && (pos.phase.kind === "work" || pos.phase.kind === "rest");
+  const bg = warning ? FLIP_BG : inInterval ? (pos.phase.kind === "work" ? WORK_BG : REST_BG) : REST_BG;
+  const fgc = warning ? FLIP_FG : inInterval ? (pos.phase.kind === "work" ? WORK_FG : REST_FG) : REST_FG;
+
   if (layout === null) return <div className="fixed inset-0" style={{ background: GROUND }} />;
   const { landscape } = layout;
 
   return (
     <div onPointerDown={onAnyTap}>
-      <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: warning ? ICE : GROUND, color: warning ? GROUND : INK, ...SAFE }}>
+      <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: bg, color: fgc, ...SAFE }}>
         {stage === "ready" && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
             <span className="text-[14px] font-medium uppercase tracking-[.2em] text-mist">{ride.name}</span>
@@ -194,6 +197,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
           </div>
         ))}
 
+        {inInterval && !showTap && !menu && clock.running && !guide && <Countdown321 phase={pos.phase} left={pos.phaseLeftSec} />}
         {stage === "riding" && showTap && <TapBanner ignoredSec={elapsed - nextPrompt} compact />}
         {stage === "riding" && menu && clock.running && (
           <div className="fixed inset-0 z-30 flex items-center justify-center bg-ground/90 p-4" onClick={() => setMenu(false)}>
