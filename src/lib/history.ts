@@ -22,6 +22,12 @@ export interface RideLog {
   /** Calories typed in from the Peloton screen. RideDeck never reads bike data. */
   kcal?: number;
   notes?: string;
+  /** Ended before the structured segments finished (V1.5). */
+  endedEarly?: boolean;
+  /** Seconds of structured riding completed (V1.5). */
+  rideSec?: number;
+  /** Seconds spent in the stretch phase (V1.5). */
+  stretchSec?: number;
   segments: SegSnapshot[];
 }
 
@@ -62,7 +68,12 @@ export function parseLogInput(raw: unknown): LogInput {
   const segmentsCompleted = int(o.segmentsCompleted, "segmentsCompleted", segmentsTotal);
   const kcal = o.kcal === undefined ? null : parseKcal(o.kcal);
   const notes = typeof o.notes === "string" && o.notes.trim() ? o.notes.trim().slice(0, 2000) : undefined;
+  const rideSec = o.rideSec === undefined ? undefined : int(o.rideSec, "rideSec", 24 * 3600);
+  const stretchSec = o.stretchSec === undefined ? undefined : int(o.stretchSec, "stretchSec", 24 * 3600);
   return {
+    ...(o.endedEarly === true ? { endedEarly: true } : {}),
+    ...(rideSec === undefined ? {} : { rideSec }),
+    ...(stretchSec === undefined ? {} : { stretchSec }),
     rideId: o.rideId.slice(0, 100),
     rideName: o.rideName.trim().slice(0, 200),
     startedAt: new Date(o.startedAt).toISOString(),
@@ -76,13 +87,22 @@ export function parseLogInput(raw: unknown): LogInput {
   };
 }
 
-export function parseLogPatch(raw: unknown): { kcal?: number | null; notes?: string | null } {
+export interface LogPatch {
+  kcal?: number | null;
+  notes?: string | null;
+  elapsedSec?: number;
+  stretchSec?: number;
+}
+
+export function parseLogPatch(raw: unknown): LogPatch {
   if (!raw || typeof raw !== "object") throw new Error("Body must be a JSON object");
   const o = raw as Record<string, unknown>;
-  const out: { kcal?: number | null; notes?: string | null } = {};
+  const out: LogPatch = {};
   if ("kcal" in o) out.kcal = parseKcal(o.kcal);
   if ("notes" in o) out.notes = typeof o.notes === "string" && o.notes.trim() ? o.notes.trim().slice(0, 2000) : null;
-  if (!("kcal" in out) && !("notes" in out)) throw new Error("Nothing to update");
+  if ("elapsedSec" in o) out.elapsedSec = int(o.elapsedSec, "elapsedSec", 24 * 3600);
+  if ("stretchSec" in o) out.stretchSec = int(o.stretchSec, "stretchSec", 24 * 3600);
+  if (Object.keys(out).length === 0) throw new Error("Nothing to update");
   return out;
 }
 

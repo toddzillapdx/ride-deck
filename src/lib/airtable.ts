@@ -1,5 +1,5 @@
 import { parseWorkout } from "./validate";
-import { parseLogInput, type LogInput, type RideLog } from "./history";
+import { parseLogInput, type LogInput, type LogPatch, type RideLog } from "./history";
 import { totalSeconds } from "./presets";
 import type { Workout } from "./types";
 
@@ -135,6 +135,9 @@ export function toLogFields(l: LogInput) {
     SegmentsTotal: l.segmentsTotal,
     ...(l.kcal === undefined ? {} : { Kcal: l.kcal }),
     ...(l.notes ? { Notes: l.notes } : {}),
+    ...(l.endedEarly ? { EndedEarly: true } : {}),
+    ...(l.rideSec === undefined ? {} : { RideSeconds: l.rideSec }),
+    ...(l.stretchSec === undefined ? {} : { StretchSeconds: l.stretchSec }),
     SegmentsJson: JSON.stringify(l.segments),
   };
 }
@@ -160,6 +163,9 @@ export function fromLogRecord(r: AtRecord): RideLog {
     segmentsTotal: num(f.SegmentsTotal) || segments.length,
     ...(typeof f.Kcal === "number" ? { kcal: f.Kcal } : {}),
     ...(typeof f.Notes === "string" && f.Notes ? { notes: f.Notes } : {}),
+    ...(f.EndedEarly === true ? { endedEarly: true } : {}),
+    ...(typeof f.RideSeconds === "number" ? { rideSec: f.RideSeconds } : {}),
+    ...(typeof f.StretchSeconds === "number" ? { stretchSec: f.StretchSeconds } : {}),
     segments,
   };
 }
@@ -181,10 +187,12 @@ export async function createLog(l: LogInput): Promise<RideLog> {
   return fromLogRecord(await call(LOG_TABLE, { method: "POST", body: JSON.stringify({ fields: toLogFields(l) }) }));
 }
 
-export async function updateLog(id: string, patch: { kcal?: number | null; notes?: string | null }): Promise<RideLog> {
+export async function updateLog(id: string, patch: LogPatch): Promise<RideLog> {
   const fields: Record<string, unknown> = {};
   if ("kcal" in patch) fields.Kcal = patch.kcal; // null clears the cell
   if ("notes" in patch) fields.Notes = patch.notes ?? "";
+  if (patch.elapsedSec !== undefined) fields.ElapsedSeconds = patch.elapsedSec;
+  if (patch.stretchSec !== undefined) fields.StretchSeconds = patch.stretchSec;
   return fromLogRecord(await call(`${LOG_TABLE}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ fields }) }));
 }
 

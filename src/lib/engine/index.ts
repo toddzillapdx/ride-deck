@@ -9,3 +9,4 @@ export * from "./readRide";
 export * from "./clockCore";
 export * from "./songs";
 export * from "./legacy";
+export * from "./stretches";
