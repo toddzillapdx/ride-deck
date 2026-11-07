@@ -25,9 +25,7 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
   const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(null);
   const [fitMsg, setFitMsg] = useState<{ lines: string[]; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [paste, setPaste] = useState("");
   const totals = useMemo(() => draftTotals(d), [d]);
-  const songsBySeg = useMemo(() => assignSongs(d), [d]);
   const plannerWorkout = useMemo(() => (totals.ride ? ({ ...rideToLegacyWorkout(totals.ride), tracklist: undefined } as Workout) : null), [totals.ride]);
   const tracks = useMemo(() => tracksFromDraft(d), [d]);
 
@@ -35,14 +33,6 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
   const setSeg = (i: number, patch: Partial<SegDraft>) => setD((x) => ({ ...x, segments: x.segments.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
   const add = (seg: SegDraft) => setD((x) => ({ ...x, segments: [...x.segments, seg] }));
 
-  const importSongs = () => {
-    const { songs, bad } = parseTracklist(paste);
-    if (!songs.length && !bad.length) return;
-    const m = mergeSongs(d.songs, songs);
-    set({ songs: m.songs });
-    setPaste(bad.join("\n"));
-    setFitMsg({ ok: bad.length === 0, lines: [`${m.added} added, ${m.updated} updated.`, ...(bad.length ? [`${bad.length} line(s) not understood, left in the box. Use Artist - Title - m:ss.`] : [])] });
-  };
   const pasteLengths = (text: string) => {
     const { songs, bad } = parseTracklist(text);
     const m = mergeSongs(d.songs, songs);
@@ -86,7 +76,7 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
           <span className="min-w-0 truncate text-[22px] font-light">{d.name || (d.sourceId ? "Converted ride" : "New ride")}</span>
           <div className="mx-auto flex gap-1 rounded-full border-2 border-line p-1">{tabBtn("build", "Build ride")}{tabBtn("music", "Plan music")}</div>
           <span className="flex-none text-[14px] font-light text-mist">
-            Segments <span className="text-ink">{fmtClock(totals.segmentSec)}</span> · Music <span className="text-ink">{d.songs.length ? `${noLen ? "~" : ""}${fmtClock(d.songs.reduce((t, x) => t + (x.durationSec ?? x.approxDurationSec ?? 0), 0))}` : "—"}</span> · Stretch <span className="text-ink">~{fmtClock(totals.stretchSec)}</span>
+            Segments <span className="text-ink">{fmtClock(totals.segmentSec)}</span>{tab === "build" ? null : <> · Music <span className="text-ink">{d.songs.length ? `${noLen ? "~" : ""}${fmtClock(d.songs.reduce((t, x) => t + (x.durationSec ?? x.approxDurationSec ?? 0), 0))}` : "—"}</span></>} · Stretch <span className="text-ink">~{fmtClock(totals.stretchSec)}</span>
           </span>
           <button onClick={save} disabled={busy} className="h-11 flex-none rounded-full bg-ice px-7 text-[15px] font-medium text-ground disabled:opacity-50">{busy ? "Saving…" : "Save ride"}</button>
         </div>
@@ -97,12 +87,6 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
             <div className="flex w-[350px] flex-none flex-col gap-3">
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1" style={{ scrollbarWidth: "none" }}>
                 <Labeled text="Name"><input className={field} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="28 min · Hills and intervals" /></Labeled>
-                <div className="flex gap-3">
-                  <Labeled text="Genre"><input className={`${field} w-full`} value={d.genre} onChange={(e) => set({ genre: e.target.value })} placeholder="Rock" /></Labeled>
-                  <Labeled text="Vibe"><input className={`${field} w-full`} value={d.vibe} onChange={(e) => set({ vibe: e.target.value })} placeholder="Classic" /></Labeled>
-                </div>
-                <Labeled text="Playlist link"><input className={field} value={d.playlistUrl} onChange={(e) => set({ playlistUrl: e.target.value })} onPaste={(e) => pasteLink(e, (v) => set({ playlistUrl: v }))} onBlur={() => set({ playlistUrl: extractUrl(d.playlistUrl) || d.playlistUrl.trim() })} placeholder="https://music.amazon.com/…" inputMode="url" /></Labeled>
-
                 <div className="flex flex-col gap-2">
                   <span className={label}>Add segment</span>
                   <div className="flex flex-wrap gap-2">
@@ -116,38 +100,18 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 rounded-[16px] bg-tile p-3">
-                  <span className={label}>Songs · {d.songs.length}</span>
-                  <p className="m-0 text-[14px] font-light text-mist">Paste one per line: <span className="text-ink">Artist - Title - 4:17</span>. Songs already listed get their length updated.</p>
-                  <textarea className={`${field} h-[84px] w-full resize-none py-2`} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={"Fleetwood Mac - Dreams - 4:17\nThe Clash - London Calling - 3:19"} />
-                  <button onClick={importSongs} className="h-11 rounded-full bg-ice text-[14px] font-medium text-ground">Add / update songs</button>
-                  {d.songs.length > 0 && (
-                    <div className="flex max-h-[130px] flex-col gap-1 overflow-y-auto">
-                      {d.songs.map((x) => (
-                        <div key={x.key} className="flex items-center justify-between gap-2 text-[14px]">
-                          <span className="min-w-0 truncate">{x.artist} - {x.title}</span>
-                          <span className={`flex-none ${x.durationSec === undefined ? "text-ice" : "text-mist"}`}>{x.durationSec !== undefined ? fmtClock(x.durationSec) : x.approxDurationSec ? `~${fmtClock(x.approxDurationSec)} est.` : "no length"}</span>
-                          <button aria-label="Remove song" className="flex-none text-mist" onClick={() => set({ songs: d.songs.filter((y) => y.key !== x.key) })}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="flex flex-none flex-col gap-2">
-                {noLen > 0 && <span className="text-[14px] text-ice">{noLen} song(s) need a real length before Fit to songs.</span>}
-                {d.songs.length > 0 && <button onClick={fit} className="h-11 rounded-full border-2 border-ice text-[14px] font-medium text-ice">Fit to songs</button>}
-                {fitMsg && fitMsg.lines.map((l, i) => <p key={i} className={`m-0 text-[14px] leading-snug ${fitMsg.ok ? "text-mist" : "text-ice"}`}>{l}</p>)}
                 {totals.error && <p className="m-0 text-[14px] leading-snug text-ice">{totals.error}</p>}
-                {!totals.error && totals.warnings.filter((w) => w.code !== "song-duration-missing").map((w, i) => <p key={i} className="m-0 text-[14px] leading-snug text-ice">⚠ {w.message}</p>)}
+                {!totals.error && totals.warnings.filter((w) => w.code !== "song-duration-missing" && w.code !== "songs-vs-segments").map((w, i) => <p key={i} className="m-0 text-[14px] leading-snug text-ice">⚠ {w.message}</p>)}
               </div>
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
               {d.segments.length === 0 && <div className="rounded-[20px] border-2 border-dashed border-line p-10 text-center text-[18px] text-mist">No segments yet. Add one from the left.</div>}
               {d.segments.map((s, i) => (
-                <SegmentCard key={s.key} s={s} i={i} count={d.segments.length} songs={songsBySeg[i].map((x) => `${x.artist} - ${x.title}${x.durationSec !== undefined ? ` (${fmtClock(x.durationSec)})` : ""}`)}
+                <SegmentCard key={s.key} s={s} i={i} count={d.segments.length}
                   on={(p) => setSeg(i, p)} up={() => setD((x) => moveSeg(x, i, i - 1))} down={() => setD((x) => moveSeg(x, i, i + 1))}
                   dup={() => setD((x) => duplicateSeg(x, i))} del={() => setD((x) => deleteSeg(x, i))} />
               ))}
@@ -159,6 +123,7 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
             style={{ eras: d.eras, genres: d.genres, seeds: d.seeds, artistOnly: d.artistOnly, vibe: d.vibe || "Classic" }}
             onStyle={(p) => set(p)}
             playlistUrl={d.playlistUrl} onPlaylistUrl={(v) => set({ playlistUrl: v })} heard={heard} onPasteLengths={pasteLengths}
+            songCount={d.songs.length} songsMissing={noLen} onFit={fit} fitLines={fitMsg}
           />
         ) : (
           <div className="rounded-[20px] border-2 border-dashed border-line p-10 text-center text-[18px] text-mist">
@@ -171,7 +136,7 @@ export default function Builder({ initial, tab: firstTab = "build", heard = [] }
 }
 
 function Labeled({ text, children }: { text: string; children: React.ReactNode }) {
-  return <label className="flex min-w-0 flex-1 flex-col gap-[6px]"><span className={label}>{text}</span>{children}</label>;
+  return <label className="flex min-w-0 flex-none flex-col gap-[6px]"><span className={label}>{text}</span>{children}</label>;
 }
 function Num({ v, on, w = 60, ph }: { v: string; on: (v: string) => void; w?: number; ph?: string }) {
   return <input className={`${field} px-2 text-center`} style={{ width: w }} value={v} onChange={(e) => on(e.target.value)} inputMode="numeric" placeholder={ph} />;
@@ -197,8 +162,8 @@ function Choice<T extends string>({ value, options, on, aria }: { value: T; opti
   );
 }
 
-function SegmentCard({ s, i, count, songs, on, up, down, dup, del }: {
-  s: SegDraft; i: number; count: number; songs: string[]; on: (p: Partial<SegDraft>) => void; up: () => void; down: () => void; dup: () => void; del: () => void;
+function SegmentCard({ s, i, count, on, up, down, dup, del }: {
+  s: SegDraft; i: number; count: number; on: (p: Partial<SegDraft>) => void; up: () => void; down: () => void; dup: () => void; del: () => void;
 }) {
   const changeType = (t: SegType) => {
     const fresh = newSeg(t);
@@ -267,9 +232,7 @@ function SegmentCard({ s, i, count, songs, on, up, down, dup, del }: {
       )}
       <div className="flex items-center gap-3 pl-9">
         <input className={`${field} min-w-0 flex-1`} value={s.cue} onChange={(e) => on({ cue: e.target.value })} placeholder="Cue shown during the segment" aria-label="Cue" />
-        {s.type === "flat" && <div className="flex items-center gap-1"><span className="text-[14px] text-mist">Songs</span><Num v={s.songCount} on={(v) => on({ songCount: v })} w={48} /></div>}
       </div>
-      {songs.length > 0 && <div className="pl-9 text-[14px] font-light text-mist">♪ {songs.join("  ·  ")}</div>}
     </div>
   );
 }

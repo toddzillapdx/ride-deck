@@ -35,7 +35,7 @@ const store = {
 const pill = "h-11 rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink";
 const lab = "text-[14px] font-medium uppercase tracking-[.14em] text-mist";
 
-export default function MusicPanel({ workout, tracks: initial, onTracks, style, onStyle, playlistUrl, onPlaylistUrl, heard, onPasteLengths }: {
+export default function MusicPanel({ workout, tracks: initial, onTracks, style, onStyle, playlistUrl, onPlaylistUrl, heard, onPasteLengths, songCount, songsMissing, onFit, fitLines }: {
   workout: Workout; tracks: Track[]; onTracks: (t: Track[]) => void;
   style: MusicStyle; onStyle: (p: Partial<MusicStyle>) => void;
   playlistUrl: string; onPlaylistUrl: (v: string) => void;
@@ -43,6 +43,7 @@ export default function MusicPanel({ workout, tracks: initial, onTracks, style, 
   heard: string[];
   /** Paste the playlist reply (Artist - Title - m:ss lines) to bring in real lengths. */
   onPasteLengths: (text: string) => string;
+  songCount: number; songsMissing: number; onFit: () => void; fitLines: { ok: boolean; lines: string[] } | null;
 }) {
   const { eras, genres, seeds, artistOnly, vibe } = style;
   const [tracks, setTracks] = useState<UiTrack[]>(() => initial.map(ui));
@@ -60,6 +61,20 @@ export default function MusicPanel({ workout, tracks: initial, onTracks, style, 
     onTracks(tracks.map(strip));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks]);
+
+  // Real lengths pasted elsewhere (or on the other tab) flow into the rows here.
+  useEffect(() => {
+    const same = (a: Track, b: Track) => a.artist.toLowerCase() === b.artist.toLowerCase() && a.title.toLowerCase() === b.title.toLowerCase();
+    setTracks((ts) => {
+      let changed = false;
+      const next = ts.map((t) => {
+        const m = initial.find((x) => same(x, t));
+        if (m && m.durationSec !== t.durationSec) { changed = true; return { ...t, durationSec: m.durationSec, durationSource: m.durationSource }; }
+        return t;
+      });
+      return changed ? next : ts;
+    });
+  }, [initial]);
 
   const plannedSec = useMemo(() => playlistSeconds(tracks), [tracks]);
   const rideSec = workout.segments.reduce((t, s) => t + s.durationSec, 0);
@@ -185,6 +200,13 @@ export default function MusicPanel({ workout, tracks: initial, onTracks, style, 
           })}
         </div>
 
+        <div className="flex flex-none items-center gap-3 rounded-[14px] bg-tile p-3">
+          <span className="min-w-0 flex-1 text-[14px] font-light leading-snug text-mist">
+            {songsMissing > 0 ? <span className="text-ice">{songsMissing} of {songCount} songs need a real length before the ride can fit them.</span> : songCount ? "Every song has a real length." : "Plan songs first."}
+            {fitLines && fitLines.lines.map((l, k) => <span key={k} className={`block ${fitLines.ok ? "text-mist" : "text-ice"}`}>{l}</span>)}
+          </span>
+          <button onClick={onFit} disabled={!songCount} className="h-11 flex-none rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice disabled:opacity-40">Fit ride to songs</button>
+        </div>
         <div className="flex flex-none flex-col gap-2 rounded-[14px] bg-tile p-3">
           <span className="text-[14px] font-light leading-snug text-mist">Songs are Claude's suggestions, and lengths marked "est." are guesses. After Claude in Chrome builds the playlist, paste its song list here (<span className="text-ink">Artist - Title - m:ss</span>) to bring in the real lengths.</span>
           <div className="flex gap-2">
