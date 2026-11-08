@@ -134,17 +134,18 @@ The ride engine is pure TypeScript with no React in `src/lib/engine/` (so it can
 
 History gains three fields on the `RideLog` table: `EndedEarly` (checkbox), `RideSeconds` and `StretchSeconds` (numbers). They are additive.
 
-### Authoring a ride (songs first, then fit)
+### Authoring a ride (V2: music first, then the ride)
 
-Real song lengths must come from you or from Amazon Music, never from the AI, because the AI's lengths are guesses. Songs it suggests keep an estimated length that **Fit to songs** refuses to use.
+The songs decide the ride. Two steps in the builder (`/builder/new`):
 
-1. Pick or plan your songs in intensity order. Use **Plan music** for ideas, then **Copy prompt + playlist** and paste it into Claude in Chrome. It builds the playlist and reports each song's length.
-2. In the builder (`/builder/new`), paste those lines (`Artist - Title - 4:17`) into **Songs**. Lines it can't read are listed, not guessed.
-3. Lay out the segments (templates: Warm-up, Cool-down, Intervals 1:1 · 30/30 x 8, Tabata 2:1 · 40/20 x 8, Hill 4 min · effort 5 to 8). A flat segment can cover more than one song (**Songs**); a hill or interval is exactly one song.
-4. Press **Fit to songs**. A hill's length equals its song; an interval gets `rounds = round(song / (work + rest))` and a `finalRestAdjustSec` so it ends with the song (a 228 s song at 40/20 is 4 rounds, adjust -12, final rest 8 s; a 250 s song at 30/30 is 4 rounds, adjust +10); a flat segment's length is the sum of its songs. Songs left over play after the ride.
-5. The header shows "Segments 27:30 · Music 31:12 · Stretch ~3:40", with warnings for an interval that breaks its ratio, a last rest under 5 s, a one-level hill, and music shorter than the ride. Warnings never block saving.
+1. **Music.** Name the playlist, choose a length (20, 30, 45 or your own minutes), pick era, genre and vibe, and press **Plan songs**. Claude returns an ordered list with an energy arc: song 1 is an easy 2:30 to 3:30 warm-up, the last song is calm and at least 2:00, and the middle rises and falls. Each song gets a 1 to 10 "feels like" number.
+2. **Real lengths** come from the Deezer catalog (metadata only, no audio), never from the AI. Each song is looked up once and saved in the Airtable `Songs` table (artist + title key, length, album, source, whether you confirmed it), so repeat songs are instant. The match prefers the original album track and skips live, demo, instrumental, remix, karaoke and tribute versions. If plausible versions disagree by more than 10 seconds (Blondie's Rapture is 5:36, 5:31 or 6:31 depending on the release), the song is flagged and you tap the right version; your choice is saved. You can also tap any length and type your own (saved as "typed").
+3. **Length rule.** The ride is every song except the last, plus a 2:00 cool-down that starts as the last song starts. It must be at least the target and at most 2:00 over (30 min means 30:00 to 32:00, never 28). **Auto-adjust length** swaps a middle song for a longer or shorter one, adds a song before the last, or drops one, then re-checks. **Swap**, **+ Add a song**, lock and remove are available per song.
+4. **Copy prompt + playlist** gives Claude in Chrome the songs with album and length, so it picks the matching version in Amazon Music. Paste the playlist link back.
+5. **Plan ride.** Every song gets one segment. The first is the warm-up (the whole song), the last is the cool-down (2:00, then the stretch screen while the song plays out). In between choose Flat, Hill or Interval (suggested from each song's feel). Lengths are derived and read-only: a hill's length equals its song; an interval gets `rounds = round(song / (work + rest))` and a `finalRestAdjustSec` so it ends with the song. **Same as above** copies the segment above onto the next song, which is how you stack.
+6. The saved ride is named `Playlist Name ride - N min` (whole minutes, rounded down). Save is refused while the ride is under the target.
 
-Playlists you open in Amazon Music drift by a few seconds (gaps, crossfade, versions), so RideDeck never claims to be in sync. The now/next song line is a guide only.
+Playlists you open in Amazon Music drift by a few seconds (gaps, crossfade, versions), so RideDeck never claims to be in sync. The catalog version may differ from Amazon's by a few seconds.
 
 ### Old rides
 
