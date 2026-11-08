@@ -86,7 +86,6 @@ export async function listRides(): Promise<{ rides: Workout[]; skipped: string[]
   const skipped: string[] = [];
   const replaced = new Set<string>(); // legacy ids that already have a converted copy in the main table
   for (const table of hasLegacy() ? [TABLE, LEGACY] : [TABLE]) {
-    const legacy = table === LEGACY && hasLegacy();
     let offset: string | undefined;
     do {
       const q = new URLSearchParams({ pageSize: "100", "sort[0][field]": "UpdatedAt", "sort[0][direction]": "desc" });
@@ -94,18 +93,16 @@ export async function listRides(): Promise<{ rides: Workout[]; skipped: string[]
       const page = await call(`${table}?${q}`);
       for (const r of page.records as AtRecord[]) {
         if (r.fields.Name === SETTINGS_NAME) continue; // app settings, not a ride
-        if (legacy && replaced.has(r.id)) continue;
         try {
-          if (!legacy) {
-            try { const s = JSON.parse(String(r.fields.WorkoutJson ?? "{}")).sourceId; if (typeof s === "string") replaced.add(s); } catch { /* ignore */ }
-          }
+          // A converted copy names the original it replaces (sourceId). The original may be in another table (preview) or in this one (production).
+          try { const s = JSON.parse(String(r.fields.WorkoutJson ?? "{}")).sourceId; if (typeof s === "string") replaced.add(s); } catch { /* ignore */ }
           rides.push(fromRecord(r));
         } catch { skipped.push(r.id); }
       }
       offset = page.offset;
     } while (offset);
   }
-  return { rides, skipped };
+  return { rides: rides.filter((r) => !replaced.has(r.id)), skipped };
 }
 
 /** The record, from the main table or (read-only) the legacy one. `legacy` says which. */
