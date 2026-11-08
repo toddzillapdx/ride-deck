@@ -84,6 +84,7 @@ export function parseRideV2(input: unknown): Ride {
         ...(str(t.reason) ? { reason: str(t.reason) } : {}),
         ...(str(t.genre) ? { genre: str(t.genre)!.slice(0, 40) } : {}),
         ...(str(t.era) ? { era: str(t.era)!.slice(0, 40) } : {}),
+        ...(str(t.album) ? { album: str(t.album)!.slice(0, 160) } : {}),
       };
     });
   }

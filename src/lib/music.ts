@@ -125,3 +125,35 @@ export function spreadCounts(tracks: Track[], s: Pick<Style, "eras" | "genres">)
     labels.map((l) => [l, tracks.filter((t) => pick(t)?.toLowerCase() === l.toLowerCase()).length]);
   return { genres: count(s.genres, (t) => t.genre), eras: count(s.eras, (t) => t.era) };
 }
+
+export interface PromptSong { artist: string; title: string; album?: string; durationSec?: number }
+
+const clock = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+
+/** The prompt for Claude in Chrome: one playlist, exact versions (album and length), in order. */
+export function toPlaylistPromptV2(name: string, songs: PromptSong[], style?: string, vibe?: string): string {
+  const total = songs.reduce((t, s) => t + (s.durationSec ?? 0), 0);
+  const list = songs.map((t, i) => `${i + 1}. ${t.artist} - ${t.title}${t.album ? ` | album: ${t.album}` : ""}${t.durationSec ? ` | length: ${clock(t.durationSec)}` : ""}`).join("\n");
+  const styleLine = [style, vibe].filter(Boolean).join(", ");
+  return [
+    `Please build a playlist in Amazon Music for me. Use the Amazon Music tab in this browser (music.amazon.com), where I am already signed in.`,
+    ``,
+    `Playlist name: ${name}`,
+    `${songs.length} songs${styleLine ? ` (${styleLine})` : ""}, about ${Math.round(total / 60)} minutes. Keep them in exactly this order, because the workout is timed to each song's length.`,
+    ``,
+    `Songs (artist - title | album | length):`,
+    list,
+    ``,
+    `How to do it:`,
+    `1. Create one new playlist with the name above. Do not change any of my existing playlists.`,
+    `2. For each song, search for "Artist Title" and add the original studio recording by that artist. Match the album and length shown above. Avoid live versions, remixes, covers, demos and karaoke versions unless there is no other option.`,
+    `3. The length matters: if the version you find is more than 10 seconds longer or shorter than the length shown, look for the version that matches. If only a different length exists, add it and tell me.`,
+    `4. If you can't find a song or aren't sure it's the right one, skip it and keep going. Don't substitute a different song.`,
+    `5. Don't buy anything, start a trial or change any account settings. If Amazon asks me to pay or sign in again, stop and tell me.`,
+    ``,
+    `When you finish, reply with:`,
+    `- the playlist link (use Share, then copy the link), on its own line`,
+    `- the songs you skipped and why`,
+    `- any song whose length in Amazon Music differs from the one above by more than 10 seconds, with the Amazon length as m:ss`,
+  ].join("\n");
+}

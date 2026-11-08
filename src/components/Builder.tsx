@@ -1,238 +1,214 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Stage from "./Stage";
-import MusicPanel from "./MusicPanel";
+import MusicStep from "./MusicStep";
+import PlanStep from "./PlanStep";
 import { fmtClock } from "@/lib/format";
-import { extractUrl, pasteLink } from "@/lib/url";
 import {
-  RATIO_SECONDS, TEMPLATES, applyFit, applyTracks, deleteSeg, draftTotals, duplicateSeg, intervalDefaults, mergeSongs, moveSeg, newFlat, newSeg, toRide, assignSongs, tracksFromDraft,
-  type RideDraft, type SegDraft, type SegType,
+  aligned, fitDraft, insertSong, newSong, removeSong, replaceSong, setPlanned, toRide,
+  type RideDraft, type SongCandidate,
 } from "@/lib/builderV2";
-import { parseTracklist, rideToLegacyWorkout, type FlatRole, type IntervalKind, type IntervalRatio } from "@/lib/engine";
+import { rideDuration } from "@/lib/engine";
 import { styleForSave } from "@/lib/music";
-import type { Workout } from "@/lib/types";
+import { checkSongs, nextAdjustment, rideTitle, songsNeeded, windowFor } from "@/lib/songFlow";
+import { NeedPasscode, applyResolved, passcode, planSongsApi, rememberApi, resolveApi, type PlanBody } from "@/lib/songClient";
 
-export type Tab = "build" | "music";
+export type Tab = "music" | "plan";
 
-const field = "h-11 rounded-[12px] border-2 border-line bg-ground px-3 text-[15px] font-normal text-ink outline-none focus:border-ice";
-const label = "text-[14px] font-medium uppercase tracking-[.14em] text-mist";
-const ctl = "flex h-11 w-11 items-center justify-center rounded-full border-2 border-line text-[18px] text-ink disabled:opacity-30";
-
-/** A new ride (or a duplicate of one). Two tabs: BUILD RIDE and PLAN MUSIC. Always saves as a new ride. */
-export default function Builder({ initial, tab: firstTab = "build", heard = [] }: { initial: RideDraft; tab?: Tab; heard?: string[] }) {
+/** A new ride (or a duplicate). Two steps: 1 MUSIC (the songs decide everything) and 2 PLAN RIDE (a segment for each song). */
+export default function Builder({ initial, tab: firstTab = "music", heard = [], notice }: { initial: RideDraft; tab?: Tab; heard?: string[]; notice?: string }) {
   const [tab, setTab] = useState<Tab>(firstTab);
-  const [d, setD] = useState<RideDraft>(initial);
-  const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(null);
-  const [fitMsg, setFitMsg] = useState<{ lines: string[]; ok: boolean } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const totals = useMemo(() => draftTotals(d), [d]);
-  const plannerWorkout = useMemo(() => (totals.ride ? ({ ...rideToLegacyWorkout(totals.ride), tracklist: undefined } as Workout) : null), [totals.ride]);
-  const tracks = useMemo(() => tracksFromDraft(d), [d]);
+  const [d, setDState] = useState<RideDraft>(initial);
+  const ref = useRef(initial);
+  /** Titles swapped or removed this session, so Auto-adjust never hands one back. */
+  const tried = useRef<Set<string>>(new Set());
+  const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(notice ? { text: notice, ok: true } : null);
+  const [busy, setBusy] = useState<"plan" | "resolve" | "adjust" | "swap" | "save" | null>(null);
+  const [swapping, setSwapping] = useState<number | null>(null);
+  const [needPass, setNeedPass] = useState(false);
+  const [pass, setPass] = useState(() => (typeof window === "undefined" ? "" : passcode.get()));
 
-  const set = (patch: Partial<RideDraft>) => setD((x) => ({ ...x, ...patch }));
-  const setSeg = (i: number, patch: Partial<SegDraft>) => setD((x) => ({ ...x, segments: x.segments.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
-  const add = (seg: SegDraft) => setD((x) => ({ ...x, segments: [...x.segments, seg] }));
+  const commit = (next: RideDraft) => { ref.current = next; setDState(next); };
+  const patch = (p: Partial<RideDraft>) => commit({ ...ref.current, ...p });
 
-  const pasteLengths = (text: string) => {
-    const { songs, bad } = parseTracklist(text);
-    const m = mergeSongs(d.songs, songs);
-    set({ songs: m.songs });
-    return `${m.updated} updated, ${m.added} added.${bad.length ? ` ${bad.length} line(s) not understood (use Artist - Title - m:ss).` : ""}`;
+  const check = useMemo(() => checkSongs(d.songs, d.targetMin), [d.songs, d.targetMin]);
+  const fitted = useMemo(() => (aligned(d) ? fitDraft(d) : null), [d]);
+  const rideSec = check.rideSec;
+  const pendingLookups = d.songs.filter((s) => s.status === "pending").length;
+  const doubtful = d.songs.filter((s) => s.status === "doubtful").length;
+  const ready = d.songs.length >= 3 && d.songs.every((s) => s.durationSec !== undefined && s.status !== "doubtful" && s.status !== "pending" && s.status !== "missing");
+
+  const styleBody = (c: RideDraft): Pick<PlanBody, "eras" | "genres" | "vibe" | "seeds" | "artistOnly" | "targetMin"> => ({
+    eras: c.eras, genres: c.genres, vibe: c.vibe || "Classic", seeds: c.seeds, artistOnly: c.artistOnly && !!c.seeds.trim(), targetMin: c.targetMin,
+  });
+  const fail = (e: unknown) => {
+    if (e instanceof NeedPasscode) setNeedPass(true);
+    setMsg({ text: (e as Error).message });
   };
-  const fit = () => {
-    const out = applyFit(d);
-    if (out.errors.length) return setFitMsg({ ok: false, lines: out.errors });
-    setD(out.draft);
-    setFitMsg({ ok: true, lines: ["Segments now end on song boundaries.", ...(out.unused ? [`${out.unused} song(s) are left over and play after the ride.`] : []), ...out.warnings.map((w) => w.message)] });
+
+  /** Look up real lengths for every song that has not been looked up. */
+  async function resolveAll(): Promise<void> {
+    const todo = ref.current.songs.filter((s) => s.status === "pending");
+    if (!todo.length) return;
+    try {
+      const res = await resolveApi(todo.map((s) => ({ artist: s.artist, title: s.title })));
+      commit({ ...ref.current, songs: applyResolved(ref.current.songs, res) });
+    } catch (e) {
+      commit({ ...ref.current, songs: ref.current.songs.map((s) => (s.status === "pending" ? { ...s, status: "missing", note: (e as Error).message } : s)) });
+    }
+  }
+
+  async function planAll() {
+    setMsg(null); setBusy("plan");
+    try {
+      const cur = ref.current;
+      const r = await planSongsApi({ ...styleBody(cur), count: songsNeeded(cur.targetMin), avoid: heard.slice(0, 150), keep: [] });
+      setNeedPass(false);
+      if (!r.songs.length) { setMsg({ text: r.notes.join(" ") || "No songs came back. Try again." }); return; }
+      commit(setPlanned(ref.current, r.songs));
+      if (r.notes.length) setMsg({ text: r.notes.join(" "), ok: true });
+      setBusy("resolve");
+      await resolveAll();
+    } catch (e) { fail(e); } finally { setBusy(null); }
+  }
+
+  /** Replace the song at `index` with one the planner picks for that place. */
+  async function swapAt(index: number, wantSec?: number): Promise<boolean> {
+    const cur = ref.current;
+    const old = cur.songs[index];
+    if (!old) return false;
+    if (old.locked) { setMsg({ text: `${old.title} is locked. Unlock it to swap.` }); return false; }
+    setSwapping(index);
+    try {
+      const r = await planSongsApi({
+        ...styleBody(cur), avoid: [...tried.current, ...heard, ...cur.songs.map((s) => s.title)].slice(0, 150),
+        keep: cur.songs.filter((_, i) => i !== index).map((s) => ({ artist: s.artist, title: s.title })),
+        slot: { index, total: cur.songs.length, before: cur.songs[index - 1] ? `${cur.songs[index - 1].artist} - ${cur.songs[index - 1].title}` : undefined, after: cur.songs[index + 1] ? `${cur.songs[index + 1].artist} - ${cur.songs[index + 1].title}` : undefined, ...(wantSec ? { wantSec } : {}) },
+      });
+      const p = r.songs[0];
+      if (!p) { setMsg({ text: r.notes.join(" ") || "No new song came back for that. Try again." }); return false; }
+      tried.current.add(old.title);
+      commit(replaceSong(ref.current, index, newSong(p)));
+      await resolveAll();
+      return true;
+    } catch (e) { fail(e); return false; } finally { setSwapping(null); }
+  }
+
+  /** Add a song before position `before` (default: just before the last song). */
+  async function addSong(before?: number, wantSec?: number): Promise<boolean> {
+    const cur = ref.current;
+    const at = before ?? Math.max(1, cur.songs.length - 1);
+    setSwapping(-1);
+    try {
+      const r = await planSongsApi({
+        ...styleBody(cur), avoid: [...tried.current, ...heard, ...cur.songs.map((s) => s.title)].slice(0, 150), keep: cur.songs.map((s) => ({ artist: s.artist, title: s.title })),
+        slot: { index: at, total: cur.songs.length + 1, before: cur.songs[at - 1] ? `${cur.songs[at - 1].artist} - ${cur.songs[at - 1].title}` : undefined, after: cur.songs[at] ? `${cur.songs[at].artist} - ${cur.songs[at].title}` : undefined, ...(wantSec ? { wantSec } : {}) },
+      });
+      const p = r.songs[0];
+      if (!p) { setMsg({ text: r.notes.join(" ") || "No new song came back. Try again." }); return false; }
+      commit(insertSong(ref.current, at, newSong(p)));
+      await resolveAll();
+      return true;
+    } catch (e) { fail(e); return false; } finally { setSwapping(null); }
+  }
+
+  const removeAt = (i: number) => { const s = ref.current.songs[i]; if (s) tried.current.add(s.title); commit(removeSong(ref.current, i)); };
+
+  /** Swap and add songs until the ride is in its window and the first and last songs fit their jobs. */
+  async function autoAdjust() {
+    setMsg(null); setBusy("adjust");
+    try {
+      for (let step = 0; step < 8; step++) {
+        await resolveAll();
+        const songs = ref.current.songs;
+        const c = checkSongs(songs, ref.current.targetMin);
+        if (c.issues.some((x) => x.kind === "missing")) { setMsg({ text: "Some songs have no length yet. Tap a song's length to type it, then run Auto-adjust again." }); return; }
+        const bad = c.issues.find((x) => x.kind === "first-length" || x.kind === "last-short");
+        if (bad) { if (!(await swapAt(bad.index))) return; continue; }
+        const a = nextAdjustment(songs, ref.current.targetMin);
+        if (a.action === "none") break;
+        if (a.action === "swap") { if (!(await swapAt(a.index, a.wantSec))) return; }
+        else if (a.action === "add") { if (!(await addSong(a.before, a.wantSec))) return; }
+        else removeAt(a.index);
+      }
+      const c = checkSongs(ref.current.songs, ref.current.targetMin);
+      const unsure = ref.current.songs.filter((x) => x.status === "doubtful").length;
+      if (c.state === "ok" && !c.issues.length && unsure) setMsg({ text: `Ride is ${fmtClock(c.rideSec as number)}. ${unsure} song${unsure === 1 ? "" : "s"} still need a version check, which can change the length.`, ok: true });
+      else if (c.state === "ok" && !c.issues.length) setMsg({ text: `Ride is ${fmtClock(c.rideSec as number)}, inside the ${d.targetMin} min window.`, ok: true });
+      else setMsg({ text: "Close, but not there yet. Run Auto-adjust again, or swap a song by hand." });
+    } catch (e) { fail(e); } finally { setBusy(null); }
+  }
+
+  const setLength = (i: number, sec: number) => {
+    const s = ref.current.songs[i];
+    if (!s) return;
+    commit({ ...ref.current, songs: ref.current.songs.map((x, j) => (j === i ? { ...x, durationSec: sec, durationSource: "typed", status: "ok", note: undefined, candidates: undefined } : x)) });
+    void rememberApi({ artist: s.artist, title: s.title, durationSec: sec });
   };
+  const pick = (i: number, c: SongCandidate) => {
+    const s = ref.current.songs[i];
+    if (!s) return;
+    commit({ ...ref.current, songs: ref.current.songs.map((x, j) => (j === i ? { ...x, durationSec: c.durationSec, durationSource: "deezer", album: c.album, status: "ok", note: undefined, candidates: undefined } : x)) });
+    void rememberApi({ artist: s.artist, title: s.title, durationSec: c.durationSec, candidate: c });
+  };
+  const toggleLock = (i: number) => commit({ ...ref.current, songs: ref.current.songs.map((x, j) => (j === i ? { ...x, locked: !x.locked } : x)) });
+
+  const title = rideSec !== undefined && d.name.trim() ? rideTitle(d.name, rideSec) : d.name.trim() ? `${d.name.trim()} ride` : d.sourceId ? "Converted ride" : "New ride";
 
   const save = async () => {
     setMsg(null);
+    if (!d.name.trim()) return setMsg({ text: "Give the playlist a name first (Music step)." });
+    if (!fitted || fitted.errors.length) return setMsg({ text: fitted?.errors[0] ?? "Plan the songs first." });
+    if (check.state === "short") return setMsg({ text: `The ride is ${fmtClock(check.deltaSec)} short of ${d.targetMin} min. Use Auto-adjust, or lower the target.` });
+    if (check.issues.some((x) => x.kind !== "missing")) return setMsg({ text: check.issues.find((x) => x.kind !== "missing")!.message });
     let ride;
-    try { ride = toRide({ ...d, genre: styleForSave({ eras: d.eras, genres: d.genres, artistOnly: d.artistOnly, seeds: d.seeds }) || d.genre }); }
-    catch (e) { return setMsg({ text: (e as Error).message }); }
-    setBusy(true);
+    try {
+      const f = fitted.draft;
+      const total = toRide({ ...f, name: "x" });
+      ride = toRide({ ...f, name: rideTitle(d.name, rideDuration(total)), genre: styleForSave({ eras: d.eras, genres: d.genres, artistOnly: d.artistOnly, seeds: d.seeds }) || d.genre });
+    } catch (e) { return setMsg({ text: (e as Error).message }); }
+    setBusy("save");
     try {
       const res = await fetch("/api/rides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ride) });
       if (res.ok) { window.location.href = "/"; return; }
       const body = await res.json().catch(() => ({}));
       setMsg({ text: res.status === 503 ? "Airtable isn't connected yet, so rides can't be saved. Set AIRTABLE_TOKEN and AIRTABLE_BASE_ID in Vercel." : body.error ?? `Save failed (${res.status})` });
     } catch (e) { setMsg({ text: (e as Error).message }); }
-    setBusy(false);
+    setBusy(null);
   };
 
-  const noLen = totals.songsMissing;
-  const tabBtn = (t: Tab, text: string) => (
-    <button onClick={() => setTab(t)} aria-pressed={tab === t}
-      className={`h-11 rounded-full px-6 text-[14px] font-medium uppercase tracking-[.12em] ${tab === t ? "bg-ice text-ground" : "text-mist"}`}>{text}</button>
+  const tabBtn = (t: Tab, n: number, text: string, off = false) => (
+    <button onClick={() => setTab(t)} disabled={off} aria-pressed={tab === t}
+      className={`h-11 rounded-full px-6 text-[14px] font-medium uppercase tracking-[.12em] disabled:opacity-40 ${tab === t ? "bg-ice text-ground" : "text-mist"}`}>{n} · {text}</button>
   );
+  const w = windowFor(d.targetMin);
 
   return (
     <Stage bg="#002A33">
       <div className="flex h-full flex-col gap-3 bg-ground text-ink" style={{ padding: "22px 48px 24px", boxSizing: "border-box" }}>
-        {/* header: where you are, the two tabs, totals, save */}
         <div className="flex flex-none items-center gap-5">
           <a href="/" className="text-[14px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
-          <span className="min-w-0 truncate text-[22px] font-light">{d.name || (d.sourceId ? "Converted ride" : "New ride")}</span>
-          <div className="mx-auto flex gap-1 rounded-full border-2 border-line p-1">{tabBtn("build", "Build ride")}{tabBtn("music", "Plan music")}</div>
+          <span className="min-w-0 truncate text-[22px] font-light">{title}</span>
+          <div className="mx-auto flex gap-1 rounded-full border-2 border-line p-1">{tabBtn("music", 1, "Music")}{tabBtn("plan", 2, "Plan ride", !ready)}</div>
           <span className="flex-none text-[14px] font-light text-mist">
-            Segments <span className="text-ink">{fmtClock(totals.segmentSec)}</span>{tab === "build" ? null : <> · Music <span className="text-ink">{d.songs.length ? `${noLen ? "~" : ""}${fmtClock(d.songs.reduce((t, x) => t + (x.durationSec ?? x.approxDurationSec ?? 0), 0))}` : "—"}</span></>} · Stretch <span className="text-ink">~{fmtClock(totals.stretchSec)}</span>
+            Ride <span className={check.state === "short" ? "text-ice" : "text-ink"}>{rideSec !== undefined ? fmtClock(rideSec) : "—"}</span> of {fmtClock(w.minSec)}–{fmtClock(w.maxSec)}
           </span>
-          <button onClick={save} disabled={busy} className="h-11 flex-none rounded-full bg-ice px-7 text-[15px] font-medium text-ground disabled:opacity-50">{busy ? "Saving…" : "Save ride"}</button>
+          <button onClick={save} disabled={busy === "save"} className="h-11 flex-none rounded-full bg-ice px-7 text-[15px] font-medium text-ground disabled:opacity-50">{busy === "save" ? "Saving…" : "Save ride"}</button>
         </div>
         {msg && <p className={`m-0 flex-none text-[14px] leading-snug ${msg.ok ? "text-mist" : "text-ice"}`}>{msg.text}</p>}
 
-        {tab === "build" ? (
-          <div className="flex min-h-0 flex-1 gap-8">
-            <div className="flex w-[350px] flex-none flex-col gap-3">
-              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1" style={{ scrollbarWidth: "none" }}>
-                <Labeled text="Name"><input className={field} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="28 min · Hills and intervals" /></Labeled>
-                <div className="flex flex-col gap-2">
-                  <span className={label}>Add segment</span>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => add(newFlat("steady"))} className="h-11 rounded-full border-2 border-line px-4 text-[14px]">+ Flat</button>
-                    <button onClick={() => add(newSeg("hill"))} className="h-11 rounded-full border-2 border-line px-4 text-[14px]">+ Hill</button>
-                    <button onClick={() => add(newSeg("interval"))} className="h-11 rounded-full border-2 border-line px-4 text-[14px]">+ Interval</button>
-                  </div>
-                  <span className={`${label} mt-1`}>Templates · all 4:00</span>
-                  <div className="flex flex-wrap gap-2">
-                    {TEMPLATES.map((t) => <button key={t.label} onClick={() => add(t.make())} className="h-11 rounded-full bg-tile px-4 text-[14px] text-ice">{t.label}</button>)}
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="flex flex-none flex-col gap-2">
-                {totals.error && <p className="m-0 text-[14px] leading-snug text-ice">{totals.error}</p>}
-                {!totals.error && totals.warnings.filter((w) => w.code !== "song-duration-missing" && w.code !== "songs-vs-segments").map((w, i) => <p key={i} className="m-0 text-[14px] leading-snug text-ice">⚠ {w.message}</p>)}
-              </div>
-            </div>
-
-            <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
-              {d.segments.length === 0 && <div className="rounded-[20px] border-2 border-dashed border-line p-10 text-center text-[18px] text-mist">No segments yet. Add one from the left.</div>}
-              {d.segments.map((s, i) => (
-                <SegmentCard key={s.key} s={s} i={i} count={d.segments.length}
-                  on={(p) => setSeg(i, p)} up={() => setD((x) => moveSeg(x, i, i - 1))} down={() => setD((x) => moveSeg(x, i, i + 1))}
-                  dup={() => setD((x) => duplicateSeg(x, i))} del={() => setD((x) => deleteSeg(x, i))} />
-              ))}
-            </div>
-          </div>
-        ) : plannerWorkout ? (
-          <MusicPanel
-            workout={plannerWorkout} tracks={tracks} onTracks={(t) => setD((x) => applyTracks(x, t))}
-            style={{ eras: d.eras, genres: d.genres, seeds: d.seeds, artistOnly: d.artistOnly, vibe: d.vibe || "Classic" }}
-            onStyle={(p) => set(p)}
-            playlistUrl={d.playlistUrl} onPlaylistUrl={(v) => set({ playlistUrl: v })} heard={heard} onPasteLengths={pasteLengths}
-            songCount={d.songs.length} songsMissing={noLen} onFit={fit} fitLines={fitMsg}
+        {tab === "music" ? (
+          <MusicStep
+            d={d} patch={patch} check={check} busy={busy} swapping={swapping} pendingLookups={pendingLookups} doubtful={doubtful} ready={ready}
+            needPass={needPass} pass={pass} onPass={(v) => { setPass(v); passcode.set(v); }}
+            onPlan={planAll} onAuto={autoAdjust} onAdd={() => addSong()} onSwap={(i) => swapAt(i)} onRemove={removeAt}
+            onLength={setLength} onPick={pick} onLock={toggleLock} onNext={() => setTab("plan")} onMsg={(text, ok) => setMsg({ text, ok })}
           />
         ) : (
-          <div className="rounded-[20px] border-2 border-dashed border-line p-10 text-center text-[18px] text-mist">
-            Fix the ride on the BUILD RIDE tab first, then plan its music.<br /><span className="text-[14px] text-ice">{totals.error}</span>
-          </div>
+          <PlanStep d={d} setD={commit} fitted={fitted} check={check} />
         )}
       </div>
     </Stage>
   );
 }
 
-function Labeled({ text, children }: { text: string; children: React.ReactNode }) {
-  return <label className="flex min-w-0 flex-none flex-col gap-[6px]"><span className={label}>{text}</span>{children}</label>;
-}
-function Num({ v, on, w = 60, ph }: { v: string; on: (v: string) => void; w?: number; ph?: string }) {
-  return <input className={`${field} px-2 text-center`} style={{ width: w }} value={v} onChange={(e) => on(e.target.value)} inputMode="numeric" placeholder={ph} />;
-}
-function Pair({ text, a, b, on, ph = ["min", "max"] }: { text: string; a: string; b: string; on: (a: string, b: string) => void; ph?: [string, string] }) {
-  return (
-    <div className="flex items-center gap-1">
-      <span className="mr-1 text-[14px] font-medium uppercase tracking-[.1em] text-mist">{text}</span>
-      <Num v={a} on={(v) => on(v, b)} w={52} ph={ph[0]} /><span className="text-mist">–</span><Num v={b} on={(v) => on(a, v)} w={52} ph={ph[1]} />
-    </div>
-  );
-}
-
-/** A row of buttons where exactly one is lit, so the choice is visible without opening a menu. */
-function Choice<T extends string>({ value, options, on, aria }: { value: T; options: { v: T; text: string; sub?: string }[]; on: (v: T) => void; aria: string }) {
-  return (
-    <div role="group" aria-label={aria} className="flex gap-1 rounded-full border-2 border-line p-1">
-      {options.map((o) => (
-        <button key={o.v} aria-pressed={value === o.v} onClick={() => on(o.v)}
-          className={`h-9 rounded-full px-4 text-[14px] font-medium ${value === o.v ? "bg-ice text-ground" : "text-mist"}`}>{o.text}{o.sub && <span className={`ml-2 font-light ${value === o.v ? "text-ground" : "text-mist"}`}>{o.sub}</span>}</button>
-      ))}
-    </div>
-  );
-}
-
-function SegmentCard({ s, i, count, on, up, down, dup, del }: {
-  s: SegDraft; i: number; count: number; on: (p: Partial<SegDraft>) => void; up: () => void; down: () => void; dup: () => void; del: () => void;
-}) {
-  const changeType = (t: SegType) => {
-    const fresh = newSeg(t);
-    on({ type: t, name: fresh.name, cue: fresh.cue, min: "4", sec: "0", cadMin: fresh.cadMin, cadMax: fresh.cadMax, songCount: t === "flat" ? s.songCount : "1" });
-  };
-  const hillSteps = s.type === "hill" ? Math.abs(Number(s.effTo) - Number(s.effFrom)) + 1 : 0;
-  const hillSec = (Number(s.min) || 0) * 60 + (Number(s.sec) || 0);
-  const ivSec = (Number(s.rounds) || 0) * ((Number(s.workSec) || 0) + (Number(s.restSec) || 0)) + (Number(s.adjust) || 0);
-  const finalRest = (Number(s.restSec) || 0) + (Number(s.adjust) || 0);
-  return (
-    <div className="flex flex-col gap-3 rounded-[18px] border-2 border-line bg-tile p-4">
-      <div className="flex items-center gap-3">
-        <span className="w-6 text-center text-[15px] font-medium text-mist">{i + 1}</span>
-        <input className={`${field} min-w-0 flex-1`} value={s.name} onChange={(e) => on({ name: e.target.value })} aria-label="Segment name" />
-        <Choice aria="Segment type" value={s.type} on={changeType} options={[{ v: "flat", text: "Flat" }, { v: "hill", text: "Hill" }, { v: "interval", text: "Interval" }]} />
-        {s.type === "interval" ? (
-          <span className="w-[70px] text-center text-[18px] font-light">{fmtClock(ivSec)}</span>
-        ) : (
-          <div className="flex items-center gap-1"><Num v={s.min} on={(v) => on({ min: v })} w={48} /><span className="text-mist">:</span><Num v={s.sec.length === 1 ? s.sec.padStart(2, "0") : s.sec} on={(v) => on({ sec: v })} w={48} /></div>
-        )}
-        <button className={ctl} onClick={up} disabled={i === 0} aria-label="Move up">↑</button>
-        <button className={ctl} onClick={down} disabled={i === count - 1} aria-label="Move down">↓</button>
-        <button className={ctl} onClick={dup} aria-label="Duplicate segment">⧉</button>
-        <button className={ctl} onClick={del} aria-label="Delete segment">✕</button>
-      </div>
-
-      {s.type === "flat" && (
-        <div className="flex flex-wrap items-center gap-3 pl-9">
-          <Choice<FlatRole> aria="Role" value={s.role} on={(role) => on({ role })} options={[{ v: "warmup", text: "Warm-up" }, { v: "steady", text: "Steady" }, { v: "recover", text: "Recover" }, { v: "cooldown", text: "Cool-down" }]} />
-          <Pair text="Cadence" a={s.cadMin} b={s.cadMax} on={(a, b) => on({ cadMin: a, cadMax: b })} />
-          <Pair text="Effort" a={s.effMin} b={s.effMax} on={(a, b) => on({ effMin: a, effMax: b })} />
-        </div>
-      )}
-      {s.type === "hill" && (
-        <div className="flex flex-wrap items-center gap-3 pl-9">
-          <Pair text="Cadence" a={s.cadMin} b={s.cadMax} on={(a, b) => on({ cadMin: a, cadMax: b })} />
-          <Pair text="Effort" a={s.effFrom} b={s.effTo} on={(a, b) => on({ effFrom: a, effTo: b })} ph={["from", "to"]} />
-          <div className="flex items-center gap-1"><span className="mr-1 text-[14px] font-medium uppercase tracking-[.1em] text-mist">Step s</span><Num v={s.stepSec} on={(v) => on({ stepSec: v })} w={52} ph="auto" /></div>
-          <span className="text-[14px] font-light text-mist">{hillSteps > 1 && hillSec > 0 ? `${hillSteps} steps of ${fmtClock(Math.round(s.stepSec ? Number(s.stepSec) : hillSec / hillSteps))}` : hillSteps === 1 ? "one level: rides as flat" : ""}</span>
-        </div>
-      )}
-      {s.type === "interval" && (
-        <div className="flex flex-col gap-3 pl-9">
-          <div className="flex flex-wrap items-center gap-3">
-            <Choice<IntervalKind> aria="Interval kind" value={s.workKind} on={(k) => on(intervalDefaults(k))} options={[{ v: "sprint", text: "Sprint", sub: "fast, light" }, { v: "resistance", text: "Resistance", sub: "heavy, slow" }]} />
-            <Choice<IntervalRatio> aria="Ratio" value={s.ratio} on={(r) => on({ ratio: r, workSec: String(RATIO_SECONDS[r][0]), restSec: String(RATIO_SECONDS[r][1]) })} options={[{ v: "1:1", text: "1:1" }, { v: "2:1", text: "2:1" }]} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[14px] text-mist">On</span><Num v={s.workSec} on={(v) => on({ workSec: v })} w={52} />
-            <span className="text-[14px] text-mist">Off</span><Num v={s.restSec} on={(v) => on({ restSec: v })} w={52} />
-            <span className="text-[14px] text-mist">Rounds</span><Num v={s.rounds} on={(v) => on({ rounds: v })} w={52} />
-            <span className="text-[14px] text-mist">Last rest ±s</span><Num v={s.adjust} on={(v) => on({ adjust: v })} w={56} />
-            <span className={`text-[14px] ${finalRest < 5 ? "text-ice" : "font-light text-mist"}`}>last rest {finalRest}s</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="w-[52px] text-[14px] font-medium uppercase tracking-[.1em] text-ice">Work</span>
-            <Pair text="Cadence" a={s.wCadMin} b={s.wCadMax} on={(a, b) => on({ wCadMin: a, wCadMax: b })} />
-            <Pair text="Effort" a={s.wEffMin} b={s.wEffMax} on={(a, b) => on({ wEffMin: a, wEffMax: b })} />
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="w-[52px] text-[14px] font-medium uppercase tracking-[.1em] text-mist">Rest</span>
-            <Pair text="Cadence" a={s.rCadMin} b={s.rCadMax} on={(a, b) => on({ rCadMin: a, rCadMax: b })} />
-            <Pair text="Effort" a={s.rEffMin} b={s.rEffMax} on={(a, b) => on({ rEffMin: a, rEffMax: b })} />
-          </div>
-        </div>
-      )}
-      <div className="flex items-center gap-3 pl-9">
-        <input className={`${field} min-w-0 flex-1`} value={s.cue} onChange={(e) => on({ cue: e.target.value })} placeholder="Cue shown during the segment" aria-label="Cue" />
-      </div>
-    </div>
-  );
-}

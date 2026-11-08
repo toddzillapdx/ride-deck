@@ -67,6 +67,8 @@ export interface RideTrack {
   reason?: string;
   genre?: string;
   era?: string;
+  /** Catalog album, shown in the playlist prompt so the right version is picked. */
+  album?: string;
 }
 
 export interface Stretch {

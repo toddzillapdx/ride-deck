@@ -30,6 +30,7 @@ export interface Track {
   /** The style label the planner filed this song under (one of the chosen genres/eras, or "Other"). */
   genre?: string;
   era?: string;
+  album?: string;
 }
 
 export interface Workout {

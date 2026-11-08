@@ -28,7 +28,12 @@ export interface FitResult {
  * Lays segments over songs, in order. Hills and intervals take exactly one song; a flat segment takes
  * `songs` (default 1). Boundaries land on song boundaries. Never guesses a missing song length.
  */
-export function fitSegmentsToSongs(songs: Song[], template: FitTemplate[]): FitResult {
+export interface FitOptions {
+  /** A cool-down ends this many seconds after its song starts (the song keeps playing under the stretches). */
+  cooldownSec?: number;
+}
+
+export function fitSegmentsToSongs(songs: Song[], template: FitTemplate[], opts: FitOptions = {}): FitResult {
   const errors: string[] = [];
   const warnings: Warning[] = [];
   const segments: RideSegment[] = [];
@@ -53,7 +58,11 @@ export function fitSegmentsToSongs(songs: Song[], template: FitTemplate[]): FitR
 
     if (t.type === "flat") {
       const { songs: _n, ...rest } = t;
-      segments.push({ ...rest, durationSec: sec });
+      const cool = t.role === "cooldown" && opts.cooldownSec !== undefined;
+      if (cool && sec < (opts.cooldownSec as number)) {
+        warnings.push({ code: "songs-vs-segments", segmentIndex, message: `"${t.name}": the song is shorter than the ${fmtSec(opts.cooldownSec as number)} cool-down.` });
+      }
+      segments.push({ ...rest, durationSec: cool ? Math.min(sec, opts.cooldownSec as number) : sec });
     } else if (t.type === "hill") {
       segments.push({ ...t, durationSec: sec });
     } else {
@@ -73,6 +82,8 @@ export function fitSegmentsToSongs(songs: Song[], template: FitTemplate[]): FitR
 
   return { ok: errors.length === 0, segments, tracklist, unused: songs.slice(next), errors, warnings };
 }
+
+const fmtSec = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 
 /** Parses pasted lines like "Artist - Title - 4:17" (or "Artist, Title, 4:17"). Bad lines are reported, not guessed. */
 export function parseTracklist(text: string): { songs: Song[]; bad: string[] } {

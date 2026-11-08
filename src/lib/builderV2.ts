@@ -1,12 +1,34 @@
 import {
-  DEFAULT_STRETCHES, fitSegmentsToSongs, parseRideV2, rideDuration, segmentDuration, stretchesFor, validateRide,
+  DEFAULT_STRETCHES, fitSegmentsToSongs, type FitOptions, parseRideV2, rideDuration, segmentDuration, stretchesFor, validateRide,
   type FitTemplate, type FlatRole, type IntervalKind, type IntervalRatio, type Ride, type RideSegment, type RideTrack, type Song, type Stretch, type Target, type Warning,
 } from "./engine";
 
 /** Editable form state for the v2 builder. Numbers are strings so half-typed input is representable. */
 export type SegType = "flat" | "interval" | "hill";
 
-export interface SongDraft extends Omit<RideTrack, "segmentIndex"> { key: string }
+/** A catalog version of a song, offered when the match is doubtful. */
+export interface SongCandidate { id: string; title: string; artist: string; album: string; durationSec: number; rank: number; isrc?: string }
+
+export interface SongDraft extends Omit<RideTrack, "segmentIndex"> {
+  key: string;
+  /** 1-10 by feel, from the planner. Only used to suggest segment types. */
+  intensity?: number;
+  locked?: boolean;
+  /** Lookup state (never saved). */
+  status?: "pending" | "ok" | "cached" | "doubtful" | "missing";
+  note?: string;
+  candidates?: SongCandidate[];
+}
+
+/** The fields of a song that are saved with the ride. */
+export function trackOf(x: SongDraft, segmentIndex: number): RideTrack {
+  return {
+    segmentIndex, title: x.title, artist: x.artist,
+    ...(x.durationSec !== undefined ? { durationSec: x.durationSec } : {}), ...(x.durationSource ? { durationSource: x.durationSource } : {}),
+    ...(x.album ? { album: x.album } : {}), ...(x.genre ? { genre: x.genre } : {}), ...(x.era ? { era: x.era } : {}), ...(x.reason ? { reason: x.reason } : {}),
+    ...(x.approxBpm !== undefined ? { approxBpm: x.approxBpm } : {}),
+  };
+}
 
 export interface SegDraft {
   key: string;
@@ -29,6 +51,8 @@ export interface SegDraft {
 
 export interface RideDraft {
   name: string; genre: string; vibe: string; playlistUrl: string;
+  /** Target ride length in minutes (the ride may run up to 2:00 over, never under). */
+  targetMin: number;
   eras: string[]; genres: string[]; seeds: string; artistOnly: boolean;
   segments: SegDraft[];
   /** The master song list, in order. Segments take songs from it front to back by their songCount. */
@@ -85,7 +109,7 @@ export const TEMPLATES: Template[] = [
 ];
 
 export function emptyDraft(): RideDraft {
-  return { name: "", genre: "", vibe: "", playlistUrl: "", eras: [], genres: [], seeds: "", artistOnly: false, segments: [newFlat("warmup"), newFlat("steady"), newFlat("cooldown")], songs: [] };
+  return { name: "", genre: "", vibe: "Classic", playlistUrl: "", targetMin: 30, eras: [], genres: [], seeds: "", artistOnly: false, segments: [], songs: [] };
 }
 
 const split = (t: Target | undefined): [string, string] =>
@@ -116,7 +140,7 @@ export function fromRide(r: Ride): RideDraft {
     };
   });
   return {
-    name: r.name, genre: r.genre ?? "", vibe: r.vibe ?? "", playlistUrl: r.playlistUrl ?? "", eras: r.eras ?? [], genres: r.genres ?? [], seeds: r.seeds ?? "", artistOnly: r.artistOnly === true,
+    name: r.name, genre: r.genre ?? "", vibe: r.vibe ?? "", playlistUrl: r.playlistUrl ?? "", targetMin: Math.min(90, Math.max(10, Math.floor(rideDuration(r) / 60) || 30)), eras: r.eras ?? [], genres: r.genres ?? [], seeds: r.seeds ?? "", artistOnly: r.artistOnly === true,
     segments, songs, stretches: r.stretches, sourceId: r.sourceId,
   };
 }
@@ -187,7 +211,7 @@ export function toRide(d: RideDraft, id = ""): Ride {
   // Songs beyond what the segments cover (music may run longer than the ride) ride along with the last segment.
   const used = parts.reduce((n, p) => n + p.length, 0);
   if (parts.length) parts[parts.length - 1] = [...parts[parts.length - 1], ...d.songs.slice(used)];
-  parts.forEach((part, i) => part.forEach(({ key: _k, ...t }) => tracklist.push({ ...t, segmentIndex: i })));
+  parts.forEach((part, i) => part.forEach((t) => tracklist.push(trackOf(t, i))));
   return parseRideV2({
     schemaVersion: 2, id, sourceId: d.sourceId, name: d.name, genre: d.genre, vibe: d.vibe, playlistUrl: d.playlistUrl,
     eras: d.eras, genres: d.genres, seeds: d.seeds, artistOnly: d.artistOnly || undefined,
@@ -275,7 +299,7 @@ export function mergeSongs(existing: SongDraft[], incoming: Song[]): { songs: So
 export interface FitOutcome { draft: RideDraft; errors: string[]; warnings: Warning[]; unused: number }
 
 /** Lay the segments over the songs: segment lengths come from the songs. Never guesses a missing length. */
-export function applyFit(d: RideDraft): FitOutcome {
+export function applyFit(d: RideDraft, opts: FitOptions = {}): FitOutcome {
   let templates: FitTemplate[];
   try {
     templates = d.segments.map((seg, i): FitTemplate => {
@@ -293,7 +317,7 @@ export function applyFit(d: RideDraft): FitOutcome {
     return { draft: d, errors: [`Fit needs ${needed} songs: one for each hill and interval, and the Songs count on each flat segment (at least 1). You have ${d.songs.length}. Add songs, or lower a flat segment's Songs count.`], warnings: [], unused: 0 };
   }
   const songs: Song[] = d.songs.map((x) => ({ title: x.title, artist: x.artist, durationSec: x.durationSec, durationSource: x.durationSource }));
-  const fit = fitSegmentsToSongs(songs, templates);
+  const fit = fitSegmentsToSongs(songs, templates, opts);
   if (!fit.ok) return { draft: d, errors: fit.errors, warnings: fit.warnings, unused: 0 };
   const segments = d.segments.map((seg, i): SegDraft => {
     const f = fit.segments[i];
@@ -305,27 +329,89 @@ export function applyFit(d: RideDraft): FitOutcome {
 }
 
 
-// ---- the music tab works on the same songs ---------------------------------
-import type { Track } from "./types";
+// ---- song-first ride: one song per segment ----------------------------------
+import { COOLDOWN_SEC, suggestSegments, type Suggested } from "./songFlow";
+import type { PlannedSongLite } from "./songClient";
 
-/** The draft's songs as v1-shaped tracks (what the music planner speaks), with their segment. */
-export function tracksFromDraft(d: RideDraft): Track[] {
-  const parts = assignSongs(d);
-  const used = parts.reduce((n, p) => n + p.length, 0);
-  if (parts.length) parts[parts.length - 1] = [...parts[parts.length - 1], ...d.songs.slice(used)];
-  return parts.flatMap((part, i) => part.map(({ key: _k, ...t }): Track => ({ ...t, segmentIndex: i })));
+const mid = (kind: "recover" | "steady"): Partial<SegDraft> => kind === "recover"
+  ? { name: "Recover", role: "recover", cadMin: "70", cadMax: "80", effMin: "2", effMax: "3", cue: "Breathe. Let it settle." }
+  : { name: "Flat road", role: "steady", cadMin: "85", cadMax: "95", effMin: "4", effMax: "5", cue: "Find a steady rhythm." };
+
+/** A segment draft for a suggested kind. */
+export function segmentFor(sg: Suggested): SegDraft {
+  if (sg.kind === "flat") {
+    if (sg.role === "warmup") return newFlat("warmup");
+    if (sg.role === "cooldown") return newFlat("cooldown");
+    return newFlat(sg.role, mid(sg.role));
+  }
+  if (sg.kind === "hill") return newSeg("hill");
+  return newSeg("interval", intervalDefaults(sg.work));
 }
 
-/**
- * Tracks coming back from the planner replace the draft's songs. A song that was already there keeps its real length;
- * each segment's song count follows the planner (so a hill or interval ends up with its one song).
- */
-export function applyTracks(d: RideDraft, tracks: Track[]): RideDraft {
-  const sorted = tracks.map((t, i) => ({ t, i })).sort((a, b) => a.t.segmentIndex - b.t.segmentIndex || a.i - b.i).map((x) => x.t);
-  const songs: SongDraft[] = sorted.map(({ segmentIndex: _s, ...t }) => {
-    const old = d.songs.find((x) => same(x, t));
-    return { ...t, key: old?.key ?? uid(), ...(old?.durationSec !== undefined ? { durationSec: old.durationSec, durationSource: old.durationSource } : {}) };
+/** The first segment is the warm-up and the last the cool-down. Everything else is the rider's. */
+export function normalizeEnds(d: RideDraft): RideDraft {
+  const n = d.segments.length;
+  if (!n) return d;
+  const segments = d.segments.map((seg, i) => {
+    if (i === 0 && !(seg.type === "flat" && seg.role === "warmup")) return { ...newFlat("warmup"), key: seg.key };
+    if (i === n - 1 && n > 1 && !(seg.type === "flat" && seg.role === "cooldown")) return { ...newFlat("cooldown"), key: seg.key };
+    if (i > 0 && i < n - 1 && seg.type === "flat" && (seg.role === "warmup" || seg.role === "cooldown")) return { ...seg, role: "steady" as FlatRole };
+    return seg;
   });
-  const counts = d.segments.map((_, i) => sorted.filter((t) => t.segmentIndex === i).length);
-  return { ...d, songs, segments: d.segments.map((seg, i) => ({ ...seg, songCount: String(counts[i]) })) };
+  return { ...d, segments: segments.map((x) => ({ ...x, songCount: "1" })) };
+}
+
+/** The planner's songs become the draft's songs, with a suggested segment for each. */
+export function setPlanned(d: RideDraft, planned: PlannedSongLite[]): RideDraft {
+  const songs: SongDraft[] = planned.map((p) => ({
+    key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec, status: "pending",
+  }));
+  const segments = suggestSegments(songs.map((x) => x.intensity)).map(segmentFor);
+  return normalizeEnds({ ...d, songs, segments });
+}
+
+export const newSong = (p: PlannedSongLite): SongDraft => ({
+  key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec, status: "pending",
+});
+
+/** Put a new song at `index` (its segment comes with it, from the song's intensity). */
+export function insertSong(d: RideDraft, index: number, song: SongDraft): RideDraft {
+  const at = Math.max(0, Math.min(index, d.songs.length));
+  const songs = d.songs.slice(); songs.splice(at, 0, song);
+  const segments = d.segments.slice();
+  const [sg] = suggestSegments([undefined, song.intensity, undefined]).slice(1);
+  segments.splice(at, 0, segmentFor(sg));
+  return normalizeEnds({ ...d, songs, segments });
+}
+
+/** Swap the song at `index` for another; the segment stays, so the rider's settings survive a swap. */
+export function replaceSong(d: RideDraft, index: number, song: SongDraft): RideDraft {
+  const songs = d.songs.slice(); songs[index] = song;
+  return { ...d, songs };
+}
+
+export function removeSong(d: RideDraft, index: number): RideDraft {
+  return normalizeEnds({ ...d, songs: d.songs.filter((_, i) => i !== index), segments: d.segments.filter((_, i) => i !== index) });
+}
+
+/** Copy segment `from`'s settings onto segment `to` (the "stack it again on the next song" move). */
+export function repeatSegment(d: RideDraft, from: number, to: number): RideDraft {
+  if (!d.segments[from] || !d.segments[to] || from === to) return d;
+  const segments = d.segments.slice();
+  segments[to] = { ...d.segments[from], key: d.segments[to].key, songCount: "1" };
+  return normalizeEnds({ ...d, segments });
+}
+
+/** Start every middle segment fresh from the music's intensities. */
+export function suggestAll(d: RideDraft): RideDraft {
+  const segments = suggestSegments(d.songs.map((x) => x.intensity)).map(segmentFor);
+  return normalizeEnds({ ...d, segments });
+}
+
+export const aligned = (d: RideDraft) => d.songs.length > 0 && d.songs.length === d.segments.length;
+
+/** The draft with every duration, round count and last-rest derived from the songs. */
+export function fitDraft(d: RideDraft): FitOutcome {
+  if (!aligned(d)) return { draft: d, errors: ["Plan the songs first: every song gets one segment."], warnings: [], unused: 0 };
+  return applyFit(normalizeEnds(d), { cooldownSec: COOLDOWN_SEC });
 }
