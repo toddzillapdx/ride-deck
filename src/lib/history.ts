@@ -7,8 +7,15 @@ export interface SegSnapshot {
   type: SegmentType;
   durationSec: number;
   cadence?: Target;
+  /** v1 rides only: resistance 0-100. Shown as effort (resistance / 10) so old and new rides read the same. */
   resistance?: Target;
+  /** v2 rides: effort 1-10. */
+  effort?: Target;
 }
+
+const tenth = (t: Target): Target => (Array.isArray(t) ? [Math.max(1, Math.round(t[0] / 10)), Math.max(1, Math.round(t[1] / 10))] : Math.max(1, Math.round(t / 10)));
+/** Effort for a snapshot, new or old. */
+export const snapshotEffort = (s: SegSnapshot): Target | undefined => s.effort ?? (s.resistance === undefined ? undefined : tenth(s.resistance));
 
 export interface RideLog {
   id: string;
@@ -22,6 +29,12 @@ export interface RideLog {
   /** Calories typed in from the Peloton screen. RideDeck never reads bike data. */
   kcal?: number;
   notes?: string;
+  /** Ended before the structured segments finished (V1.5). */
+  endedEarly?: boolean;
+  /** Seconds of structured riding completed (V1.5). */
+  rideSec?: number;
+  /** Seconds spent in the stretch phase (V1.5). */
+  stretchSec?: number;
   segments: SegSnapshot[];
 }
 
@@ -62,7 +75,12 @@ export function parseLogInput(raw: unknown): LogInput {
   const segmentsCompleted = int(o.segmentsCompleted, "segmentsCompleted", segmentsTotal);
   const kcal = o.kcal === undefined ? null : parseKcal(o.kcal);
   const notes = typeof o.notes === "string" && o.notes.trim() ? o.notes.trim().slice(0, 2000) : undefined;
+  const rideSec = o.rideSec === undefined ? undefined : int(o.rideSec, "rideSec", 24 * 3600);
+  const stretchSec = o.stretchSec === undefined ? undefined : int(o.stretchSec, "stretchSec", 24 * 3600);
   return {
+    ...(o.endedEarly === true ? { endedEarly: true } : {}),
+    ...(rideSec === undefined ? {} : { rideSec }),
+    ...(stretchSec === undefined ? {} : { stretchSec }),
     rideId: o.rideId.slice(0, 100),
     rideName: o.rideName.trim().slice(0, 200),
     startedAt: new Date(o.startedAt).toISOString(),
@@ -72,17 +90,30 @@ export function parseLogInput(raw: unknown): LogInput {
     segmentsTotal,
     ...(kcal === null ? {} : { kcal }),
     ...(notes ? { notes } : {}),
-    segments: snapshot(w),
+    segments: snapshot(w).map((seg, i) => {
+      const e = (o.segments as { effort?: unknown }[])[i]?.effort;
+      const ok = (n: unknown) => typeof n === "number" && n >= 1 && n <= 10;
+      return Array.isArray(e) && e.length === 2 && ok(e[0]) && ok(e[1]) ? { ...seg, effort: [e[0], e[1]] as [number, number] } : ok(e) ? { ...seg, effort: e as number } : seg;
+    }),
   };
 }
 
-export function parseLogPatch(raw: unknown): { kcal?: number | null; notes?: string | null } {
+export interface LogPatch {
+  kcal?: number | null;
+  notes?: string | null;
+  elapsedSec?: number;
+  stretchSec?: number;
+}
+
+export function parseLogPatch(raw: unknown): LogPatch {
   if (!raw || typeof raw !== "object") throw new Error("Body must be a JSON object");
   const o = raw as Record<string, unknown>;
-  const out: { kcal?: number | null; notes?: string | null } = {};
+  const out: LogPatch = {};
   if ("kcal" in o) out.kcal = parseKcal(o.kcal);
   if ("notes" in o) out.notes = typeof o.notes === "string" && o.notes.trim() ? o.notes.trim().slice(0, 2000) : null;
-  if (!("kcal" in out) && !("notes" in out)) throw new Error("Nothing to update");
+  if ("elapsedSec" in o) out.elapsedSec = int(o.elapsedSec, "elapsedSec", 24 * 3600);
+  if ("stretchSec" in o) out.stretchSec = int(o.stretchSec, "stretchSec", 24 * 3600);
+  if (Object.keys(out).length === 0) throw new Error("Nothing to update");
   return out;
 }
 

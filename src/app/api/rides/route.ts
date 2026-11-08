@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, airtableConfigured, createRide, listRides } from "@/lib/airtable";
+import { AirtableNotConfigured, airtableConfigured, createRide, createRideV2, listRides } from "@/lib/airtable";
+import { parseRideV2 } from "@/lib/engine";
 import { parseWorkout } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,16 @@ export async function GET() {
 export async function POST(req: Request) {
   let body: unknown;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Body must be JSON" }, { status: 400 }); }
+  // A v2 ride (the new builder) is stored as v2; anything else is the old v1 shape.
+  if ((body as { schemaVersion?: unknown } | null)?.schemaVersion === 2) {
+    let ride;
+    try { ride = parseRideV2(body); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
+    try { return NextResponse.json(await createRideV2(ride), { status: 201 }); }
+    catch (e) {
+      if (e instanceof AirtableNotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
+      return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
   let workout;
   try { workout = parseWorkout(body); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
   try {

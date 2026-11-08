@@ -5,7 +5,7 @@ export const GENRES = ["Rock", "Pop", "Hip-hop / Rap", "Grunge / Alt", "Punk", "
 export const VIBES = ["Classic", "High energy", "Recent"] as const;
 export const DEFAULT_SONG_SEC = 210;
 
-export const songSec = (t: Track) => t.approxDurationSec ?? DEFAULT_SONG_SEC;
+export const songSec = (t: Track) => t.durationSec ?? t.approxDurationSec ?? DEFAULT_SONG_SEC;
 export const playlistSeconds = (tracks: Track[]) => tracks.reduce((n, t) => n + songSec(t), 0);
 
 export const amazonSearchUrl = (t: Pick<Track, "title" | "artist">) =>
@@ -82,7 +82,7 @@ export function toPlaylistPrompt(w: Workout, tracks: Track[], genre?: string, vi
     ``,
     `When you finish, reply with:`,
     `- the playlist link (use Share, then copy the link), on its own line`,
-    `- the list of songs you added, in order`,
+    `- the list of songs you added, in order, one per line as: Artist - Title - m:ss (the length shown in Amazon Music, e.g. 4:17). Please read the real length from Amazon Music; do not guess it.`,
     `- the songs you skipped and why`,
   ].join("\n");
 }

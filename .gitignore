@@ -6,3 +6,7 @@ node_modules/
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+
+# Your rides and the converted copies stay on this machine, never in the (public) repo
+/backup/
+/converted/

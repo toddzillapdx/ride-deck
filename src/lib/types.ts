@@ -1,8 +1,5 @@
 export type SegmentType = "warmup" | "flat" | "climb" | "sprint" | "recover" | "cooldown";
-/**
- * How a block is ridden. `auto` (the default) means sprints run 1:00 on / 1:00 off and climbs add
- * resistance every minute; everything else is steady. See lib/pacing.ts.
- */
+/** How a block was ridden in v1 (kept so old rides still parse). v2 rides use intervals and hills instead. */
 export type Pacing = "auto" | "steady" | "intervals" | "ramp";
 /** A target is a [min, max] range or a single number. */
 export type Target = [number, number] | number;
@@ -25,6 +22,9 @@ export interface Track {
   approxBpm?: number;
   /** Approximate song length in seconds, used to pace songs against segments. */
   approxDurationSec?: number;
+  /** A real song length (from the rider or a catalog), never an estimate. */
+  durationSec?: number;
+  durationSource?: string;
   /** One line on why the song fits the segment. */
   reason?: string;
   /** The style label the planner filed this song under (one of the chosen genres/eras, or "Other"). */

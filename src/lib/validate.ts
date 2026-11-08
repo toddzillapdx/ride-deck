@@ -50,6 +50,8 @@ export function parseWorkout(input: unknown): Workout {
         segmentIndex: t.segmentIndex, title: t.title, artist: t.artist,
         ...(isNum(t.approxBpm) ? { approxBpm: t.approxBpm } : {}),
         ...(isNum(t.approxDurationSec) ? { approxDurationSec: t.approxDurationSec } : {}),
+        ...(isNum(t.durationSec) && t.durationSec > 0 ? { durationSec: Math.round(t.durationSec) } : {}),
+        ...(typeof t.durationSource === "string" && t.durationSource ? { durationSource: t.durationSource.slice(0, 40) } : {}),
         ...(typeof t.reason === "string" && t.reason ? { reason: t.reason } : {}),
         ...(typeof t.genre === "string" && t.genre ? { genre: t.genre.slice(0, 40) } : {}),
         ...(typeof t.era === "string" && t.era ? { era: t.era.slice(0, 40) } : {}),

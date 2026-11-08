@@ -113,7 +113,7 @@ export default function HistoryView() {
                   <button onClick={() => setSelected(open ? null : l.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="truncate text-[16px] font-normal">{l.rideName}</span>
-                      <span className="text-[12px] font-light text-mist">{when(l.startedAt)} · {fmtClock(l.elapsedSec)}{l.segmentsCompleted < l.segmentsTotal ? " · ended early" : ""}</span>
+                      <span className="text-[12px] font-light text-mist">{when(l.startedAt)} · {fmtClock(l.elapsedSec)}{l.endedEarly || l.segmentsCompleted < l.segmentsTotal ? " · ended early" : ""}</span>
                     </div>
                     <div className="flex flex-none flex-col items-end">
                       <span className="num text-[24px] font-light">{l.kcal ?? "—"}</span>
@@ -176,7 +176,7 @@ export default function HistoryView() {
                   className={`flex flex-none items-center gap-4 rounded-[16px] border-2 bg-tile px-5 py-4 text-left ${l.id === selected ? "border-ice" : "border-line"}`}>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="truncate text-[17px] font-normal">{l.rideName}</span>
-                    <span className="text-[13px] font-light text-mist">{when(l.startedAt)} · {fmtClock(l.elapsedSec)}{l.segmentsCompleted < l.segmentsTotal ? " · ended early" : ""}</span>
+                    <span className="text-[13px] font-light text-mist">{when(l.startedAt)} · {fmtClock(l.elapsedSec)}{l.endedEarly || l.segmentsCompleted < l.segmentsTotal ? " · ended early" : ""}</span>
                   </div>
                   <div className="flex flex-none flex-col items-end">
                     <span className="num text-[26px] font-light" style={{ letterSpacing: "-.01em" }}>{l.kcal ?? "—"}</span>
