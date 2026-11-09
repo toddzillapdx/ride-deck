@@ -2,7 +2,7 @@
 import { fmtClock } from "@/lib/format";
 import { RATIO_SECONDS, intervalDefaults, newSeg, type SegDraft, type SegType, type SongDraft } from "@/lib/builderV2";
 import { COOLDOWN_SEC } from "@/lib/songFlow";
-import type { FlatRole, IntervalKind, IntervalRatio } from "@/lib/engine";
+import { hillCoolSec, type FlatRole, type IntervalKind, type IntervalRatio } from "@/lib/engine";
 import { Choice, Num, Pair, field } from "./builderUi";
 
 /** One song and the segment it drives. The length is read-only: the song decides it. */
@@ -49,7 +49,7 @@ export default function SegmentCard({ s, i, song, startSec, lenSec, end, on, rep
         <div className="flex flex-wrap items-center gap-3 pl-9">
           <Pair text="Cadence" a={s.cadMin} b={s.cadMax} on={(a, b) => on({ cadMin: a, cadMax: b })} />
           <Pair text="Effort" a={s.effFrom} b={s.effTo} on={(a, b) => on({ effFrom: a, effTo: b })} ph={["from", "to"]} />
-          <span className="text-[14px] font-light text-mist">{hillSteps > 1 && lenSec ? `${hillSteps} steps of ${fmtClock(Math.round(lenSec / hillSteps))}, the whole song` : hillSteps === 1 ? "one level: rides as flat" : ""}</span>
+          <span className="text-[14px] font-light text-mist">{hillSteps > 1 && lenSec ? `${hillSteps} steps of ${fmtClock(Math.round((lenSec - hillCoolSec({ durationSec: lenSec, effortFrom: Number(s.effFrom), effortTo: Number(s.effTo) })) / hillSteps))}, then ${hillCoolSec({ durationSec: lenSec, effortFrom: Number(s.effFrom), effortTo: Number(s.effTo) })}s easy` : hillSteps === 1 ? "one level: rides as flat" : ""}</span>
         </div>
       )}
       {s.type === "interval" && (

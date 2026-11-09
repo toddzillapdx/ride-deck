@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildPhases, convertV1, effortWord, fitSegmentsToSongs, parseTracklist, phaseAt, readRide, rideDuration, validateRide,
+  buildPhases, hillCoolSec, convertV1, effortWord, fitSegmentsToSongs, parseTracklist, phaseAt, readRide, rideDuration, validateRide,
   newClock, startClock, pauseClock, resumeClock, elapsedSec, resolveSpeed, type Ride, type V1Workout,
 } from "../index";
 
@@ -31,10 +31,22 @@ describe("buildPhases", () => {
     expect(p[7].endSec - p[7].startSec).toBe(40);
   });
 
-  it("hill 240s from 5 to 8 has 4 levels of 60s", () => {
+  it("hill 240s from 5 to 8 has 4 steps, then a 20s recovery", () => {
     const p = buildPhases(ride([{ type: "hill", name: "H", durationSec: 240, cadence: [60, 70], effortFrom: 5, effortTo: 8, cue: "" }]));
-    expect(p.map((x) => [x.startSec, x.endSec, x.effort])).toEqual([[0, 60, 5], [60, 120, 6], [120, 180, 7], [180, 240, 8]]);
+    expect(p.map((x) => [x.startSec, x.endSec, x.kind])).toEqual([[0, 55, "hillStep"], [55, 110, "hillStep"], [110, 165, "hillStep"], [165, 220, "hillStep"], [220, 240, "hillCool"]]);
+    expect(p.slice(0, 4).map((x) => x.effort)).toEqual([5, 6, 7, 8]);
     expect(p[3]).toMatchObject({ step: 4, stepsTotal: 4 });
+    expect(p[4]).toMatchObject({ effort: [2, 3], cadence: [70, 80], label: "Recover" });
+  });
+
+  it("the recovery can be changed or turned off, and never takes more than a quarter of a short hill", () => {
+    const base = { type: "hill" as const, name: "H", cadence: 65, effortFrom: 5, effortTo: 8, cue: "" };
+    expect(buildPhases(ride([{ ...base, durationSec: 240, cooldownSec: 0 }])).some((x) => x.kind === "hillCool")).toBe(false);
+    const p30 = buildPhases(ride([{ ...base, durationSec: 240, cooldownSec: 30 }]));
+    expect(p30[p30.length - 1]).toMatchObject({ startSec: 210, endSec: 240 });
+    const tiny = buildPhases(ride([{ ...base, durationSec: 60 }]));
+    expect(tiny[tiny.length - 1]).toMatchObject({ kind: "hillCool", startSec: 45, endSec: 60 });
+    expect(hillCoolSec({ ...base, durationSec: 240 })).toBe(20);
   });
 
   it("hill with odd split stays contiguous and ends on the segment end", () => {
@@ -42,11 +54,12 @@ describe("buildPhases", () => {
     expect(p[0].startSec).toBe(0);
     for (let i = 1; i < p.length; i++) expect(p[i].startSec).toBe(p[i - 1].endSec);
     expect(p[p.length - 1].endSec).toBe(250);
+    expect(p[p.length - 1].kind).toBe("hillCool");
   });
 
   it("hill stepSec override; too-long steps drop later levels", () => {
     const p = buildPhases(ride([{ type: "hill", name: "H", durationSec: 200, cadence: 65, effortFrom: 4, effortTo: 9, stepSec: 90, cue: "" }]));
-    expect(p.map((x) => [x.startSec, x.endSec, x.effort])).toEqual([[0, 90, 4], [90, 180, 5], [180, 200, 6]]);
+    expect(p.map((x) => [x.startSec, x.endSec, x.effort])).toEqual([[0, 90, 4], [90, 180, 5], [180, 200, [2, 3]]]);
   });
 
   it("hill with equal effort rides as flat", () => {
@@ -61,7 +74,7 @@ describe("buildPhases", () => {
       { type: "hill", name: "H", durationSec: 60, cadence: 65, effortFrom: 5, effortTo: 6, cue: "" },
     ]));
     expect(p[1].startSec).toBe(100);
-    expect(p[2].endSec).toBe(160);
+    expect(p[p.length - 1].endSec).toBe(160);
   });
 });
 
@@ -277,5 +290,14 @@ describe("clock", () => {
     expect(resolveSpeed(30, false)).toBe(30);
     expect(resolveSpeed(7, false)).toBe(1);
     expect(elapsedSec(startClock(newClock(10), 0), 6000)).toBe(60);
+  });
+});
+
+describe("sprint intervals are about fast legs, not heavy resistance", () => {
+  it("a converted v1 sprint block works at effort 4-6, and the sprint defaults are 4-6", async () => {
+    const { newSeg, intervalDefaults } = await import("../../builderV2");
+    expect(intervalDefaults("sprint")).toMatchObject({ wEffMin: "4", wEffMax: "6" });
+    expect(newSeg("interval")).toMatchObject({ workKind: "sprint", wEffMin: "4", wEffMax: "6" });
+    expect(intervalDefaults("resistance")).toMatchObject({ wEffMin: "8", wEffMax: "9" });
   });
 });

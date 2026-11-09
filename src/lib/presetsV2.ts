@@ -26,7 +26,7 @@ export const PRESETS_V2: Ride[] = [
     warm(5),
     flat("steady", "Flat road", 300, [85, 95], [4, 5], "Find a steady rhythm."),
     hill("Climb", 300, [60, 70], 4, 6, "Heavy and slow. Stay seated, shoulders loose."),
-    interval("Sprint", "sprint", "1:1", 30, 30, 3, [[110, 120], [8, 9]], "Fast legs, stand if you want."),
+    interval("Sprint", "sprint", "1:1", 30, 30, 3, [[110, 120], [4, 6]], "Fast legs, stand if you want."),
     recover(120),
     hill("Climb", 300, [60, 70], 5, 7, "Dig in. One more big climb."),
     cool(5),
@@ -41,7 +41,7 @@ export const PRESETS_V2: Ride[] = [
   ]),
   r("preset-hiit-20", "20 min · HIIT", [
     warm(3),
-    interval("Sprint intervals", "sprint", "2:1", 40, 20, 6, [[110, 120], [8, 9]], "Fast legs. Recover between rounds."),
+    interval("Sprint intervals", "sprint", "2:1", 40, 20, 6, [[110, 120], [4, 6]], "Fast legs. Recover between rounds."),
     recover(120),
     interval("Resistance intervals", "resistance", "1:1", 30, 30, 6, [[55, 65], [8, 9]], "Heavy and strong, then easy."),
     cool(3),

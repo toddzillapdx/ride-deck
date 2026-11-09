@@ -78,7 +78,7 @@ export function newSeg(type: SegType, over: Partial<SegDraft> = {}): SegDraft {
     key: uid(), type, name: "", cue: "", min: "4", sec: "0", cadMin: "85", cadMax: "95",
     role: "steady", effMin: "4", effMax: "5", effFrom: "5", effTo: "8", stepSec: "",
     workKind: "sprint", ratio: "1:1", workSec: "30", restSec: "30", rounds: "4", adjust: "0",
-    wCadMin: "110", wCadMax: "120", wEffMin: "8", wEffMax: "9", rCadMin: "70", rCadMax: "80", rEffMin: "2", rEffMax: "3",
+    wCadMin: "110", wCadMax: "120", wEffMin: "4", wEffMax: "6", rCadMin: "70", rCadMax: "80", rEffMin: "2", rEffMax: "3",
     songCount: "1",
   };
   if (type === "flat") Object.assign(base, { name: "Flat road", cue: "Find a steady rhythm." });
@@ -101,7 +101,7 @@ export const newFlat = (role: FlatRole, over: Partial<SegDraft> = {}) => {
 export const RATIO_SECONDS: Record<IntervalRatio, [number, number]> = { "1:1": [30, 30], "2:1": [40, 20] };
 export function intervalDefaults(kind: IntervalKind): Partial<SegDraft> {
   return kind === "sprint"
-    ? { workKind: "sprint", name: "Sprint intervals", wCadMin: "110", wCadMax: "120", wEffMin: "8", wEffMax: "9", cue: "Fast legs. Recover between rounds." }
+    ? { workKind: "sprint", name: "Sprint intervals", wCadMin: "110", wCadMax: "120", wEffMin: "4", wEffMax: "6", cue: "Fast legs. Recover between rounds." }
     : { workKind: "resistance", name: "Resistance intervals", wCadMin: "55", wCadMax: "65", wEffMin: "8", wEffMax: "9", cue: "Heavy and strong, then easy." };
 }
 

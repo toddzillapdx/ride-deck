@@ -42,7 +42,8 @@ function segment(raw: unknown, i: number): RideSegment {
     return {
       type: "hill", name, durationSec: dur(), cadence: cadenceT(s.cadence, at),
       effortFrom: effortN(s.effortFrom, `${at} effortFrom`), effortTo: effortN(s.effortTo, `${at} effortTo`),
-      ...(stepSec !== undefined ? { stepSec: stepSec as number } : {}), cue: cueText,
+      ...(stepSec !== undefined ? { stepSec: stepSec as number } : {}),
+      ...(isNum(s.cooldownSec) && s.cooldownSec >= 0 && s.cooldownSec <= 120 ? { cooldownSec: Math.round(s.cooldownSec) } : {}), cue: cueText,
     };
   }
   if (s.type === "interval") {

@@ -75,7 +75,7 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
   const cap = landscape ? "26dvh" : "17dvh";
   // Hill step cue: where effort goes next, and when.
   const hillNext = p.kind === "hillStep" && nextP && nextP.segmentIndex === p.segmentIndex ? nextP : undefined;
-  const stepCue = p.kind === "hillStep" ? (hillNext ? `Up to ${fmtTarget(hillNext.effort)} in ${fmtClock(Math.ceil(phaseLeft))}` : "Top of the hill. Hold it.") : undefined;
+  const stepCue = p.kind === "hillStep" ? (hillNext ? (hillNext.kind === "hillCool" ? `Recover in ${fmtClock(Math.ceil(phaseLeft))}` : `Up to ${fmtTarget(hillNext.effort)} in ${fmtClock(Math.ceil(phaseLeft))}`) : "Top of the hill. Hold it.") : p.kind === "hillCool" ? "Ease off and spin it out." : undefined;
   // The step pulse: only for steps after the first (the segment-start change is announced by the flip screen).
   const pulse = p.kind === "hillStep" && (p.step ?? 1) > 1;
   const muted = onIce ? { color: GROUND, opacity: 0.75 } : { color: MIST };
@@ -83,7 +83,7 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
   const label = (
     <span className="flex max-w-full items-center justify-center gap-2 truncate text-[14px] font-medium uppercase tracking-[.12em]" style={{ color: onIce ? GROUND : ICE }}>
       <span className="truncate">{segTitle(seg)}</span>
-      {interval && <span className="flex-none rounded-full px-3 py-[2px] text-[14px] font-medium tracking-[.1em]" style={onIce ? { background: GROUND, color: ICE } : { border: `2px solid ${ICE}`, color: ICE }}>{p.kind === "work" ? "WORK" : "REST"}</span>}
+      {(interval || p.kind === "hillCool") && <span className="flex-none rounded-full px-3 py-[2px] text-[14px] font-medium tracking-[.1em]" style={onIce ? { background: GROUND, color: ICE } : { border: `2px solid ${ICE}`, color: ICE }}>{p.kind === "work" ? "WORK" : p.kind === "hillCool" ? "RECOVER" : "REST"}</span>}
     </span>
   );
   const clock = <span className={`${num} font-extralight`} style={{ fontSize: landscape ? "clamp(44px, 15dvh, 130px)" : "clamp(64px, 12dvh, 170px)" }}>{fmtClock(Math.ceil(phaseLeft))}</span>;
@@ -117,7 +117,7 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
           action={<button aria-label="What do the effort numbers mean?" onClick={onGuide} className="flex h-[28px] w-[28px] items-center justify-center rounded-full border-2 border-line text-[14px] font-medium text-ice">?</button>}
           numClass={pulse ? "effort-pulse" : ""} numKey={idx}
           word={effortWord(p.effort)} cue={stepCue}
-          bar={p.kind === "hillStep" ? <HillBar phases={phases.filter((x) => x.segmentIndex === p.segmentIndex)} elapsed={elapsed} /> : undefined}
+          bar={p.kind === "hillStep" || p.kind === "hillCool" ? <HillBar phases={phases.filter((x) => x.segmentIndex === p.segmentIndex)} elapsed={elapsed} /> : undefined}
           foot={changeLine(prev?.effort, p.effort)}
         />
         <Tile grow={1} label="Cadence" unit="RPM" color={ICE} target={p.cadence} cap={cap} dark={onIce} foot={changeLine(prev?.cadence, p.cadence)} />

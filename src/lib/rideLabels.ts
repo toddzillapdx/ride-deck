@@ -29,7 +29,7 @@ export function nextWord(ride: Ride, cur: Phase, next: Phase): string {
   const seg = ride.segments[next.segmentIndex];
   const sameSeg = next.segmentIndex === cur.segmentIndex;
   if (seg.type === "interval") return sameSeg ? (next.kind === "work" ? "WORK" : "REST") : seg.workKind === "sprint" ? "SPRINT" : "RESISTANCE";
-  if (seg.type === "hill" && sameSeg) return `${seg.name} INCREASE`.toUpperCase();
+  if (seg.type === "hill" && sameSeg) return next.kind === "hillCool" ? "RECOVER" : `${seg.name} INCREASE`.toUpperCase();
   return seg.name.toUpperCase();
 }
 

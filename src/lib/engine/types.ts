@@ -48,6 +48,8 @@ export interface HillSegment {
   effortTo: number;
   /** Optional override of seconds per effort level. Default: durationSec / levels. */
   stepSec?: number;
+  /** The last seconds of every hill are an easy recovery, so a hill never ends straight into hard work. Default 20; 0 turns it off. */
+  cooldownSec?: number;
   cue: string;
 }
 
@@ -94,7 +96,7 @@ export interface Ride {
   stretches?: Stretch[];
 }
 
-export type PhaseKind = "flat" | "work" | "rest" | "hillStep";
+export type PhaseKind = "flat" | "work" | "rest" | "hillStep" | "hillCool";
 
 export interface Phase {
   segmentIndex: number;

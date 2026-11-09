@@ -42,7 +42,10 @@ describe("3-2-1", () => {
     const hp = buildPhases(hills);
     const steps = hp.filter((p) => p.kind === "hillStep" && p.segmentIndex === 1);
     expect(countdownInfo(view(steps[0].endSec - 2, hills))).toMatchObject({ text: "HILL INCREASE NEXT" });
-    expect(countdownInfo(view(steps[steps.length - 1].endSec - 2, hills))).toBeNull();
+    // the top step warns that the recovery is next; the recovery itself ends the segment, which flips instead
+    expect(countdownInfo(view(steps[steps.length - 1].endSec - 2, hills))).toMatchObject({ text: "RECOVER NEXT" });
+    const cool = hp.find((p) => p.kind === "hillCool" && p.segmentIndex === 1)!;
+    expect(countdownInfo(view(cool.endSec - 2, hills))).toBeNull();
   });
   it("not in the last interval phase of a segment (the flip covers it)", () => {
     const lastRest = phases.filter((p) => p.segmentIndex === 1).at(-1)!;

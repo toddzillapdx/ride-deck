@@ -41,6 +41,8 @@ export interface Conversion {
 const RAMP_PER_MIN = 5; // v1 pacing.ts
 const RAMP_MAX_RISE = 25;
 const SPRINT_FLOOR = 8;
+/** A sprint interval is about fast legs, not heavy resistance: effort 4 to 6. */
+const SPRINT_INTERVAL_EFFORT: Target = [4, 6];
 const SPRINT_CADENCE = 100;
 const REST_CUE = { cadence: [70, 80] as [number, number], effort: [2, 3] as [number, number] };
 
@@ -101,7 +103,7 @@ export function convertV1(w: V1Workout, opts: ConvertOptions = {}): Conversion {
       out = {
         type: "interval", name: s.name, workKind: "sprint", ratio, workSec, restSec, rounds,
         ...(adj !== 0 ? { finalRestAdjustSec: adj } : {}),
-        work: { cadence, effort: collapse(Math.max(SPRINT_FLOOR, lo(eff)), Math.max(SPRINT_FLOOR + 1, hi(eff))) },
+        work: { cadence, effort: SPRINT_INTERVAL_EFFORT },
         rest: REST_CUE, cue,
       };
       flag(i, `sprint block became ${sprintMode} x ${rounds}; confirm the ratio and rounds`, f);

@@ -218,16 +218,16 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
   return (
     <Stage bg="#002A33">
       <div className="relative flex h-full flex-col gap-3 bg-ground text-ink" style={{ padding: "16px 40px 16px", boxSizing: "border-box" }}>
-        {/* header: where you are */}
+        {/* header: the title may grow, the steps stay put on the right */}
         <div className="flex h-10 flex-none items-center gap-5">
-          <a href="/" className="text-[14px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
-          <span className="min-w-0 truncate text-[20px] font-light">{title}</span>
-          <div className="mx-auto flex items-center gap-2">
+          <a href="/" className="flex-none text-[14px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
+          <span className="min-w-0 flex-1 truncate text-[20px] font-light">{title}</span>
+          {resumed && <button onClick={startOver} className="flex-none text-[14px] text-mist underline underline-offset-4">Resumed your draft · start over</button>}
+          <div className="flex flex-none items-center gap-2">
             {stepPill(1, "Soundtrack", w1, !w1, w1 ? undefined : () => setTab("music"))}
             <span className="text-mist">→</span>
             {stepPill(2, "Ride segments", !w1, false, undefined)}
           </div>
-          {resumed && <button onClick={startOver} className="flex-none text-[14px] text-mist underline underline-offset-4">Resumed your draft · start over</button>}
         </div>
 
         {/* the step */}

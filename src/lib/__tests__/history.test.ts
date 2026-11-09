@@ -45,7 +45,7 @@ describe("history effort snapshots", () => {
     const segs = rideSnapshot(PRESETS_V2[1]);
     const l = parseLogInput({ ...base, segments: segs, segmentsCompleted: 1 });
     expect(l.segments[2]).toMatchObject({ type: "climb", effort: [4, 6] });
-    expect(l.segments[3].effort).toEqual([8, 9]);
+    expect(l.segments[3].effort).toEqual([4, 6]);
   });
   it("old resistance rows read as effort 1-10", () => {
     expect(snapshotEffort({ name: "x", type: "flat", durationSec: 1, resistance: [55, 65] })).toEqual([6, 7]);
