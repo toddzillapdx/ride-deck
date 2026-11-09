@@ -49,8 +49,9 @@ export async function POST(req: Request) {
         ...(typeof s.before === "string" ? { before: s.before.slice(0, 200) } : {}), ...(typeof s.after === "string" ? { after: s.after.slice(0, 200) } : {}),
         ...(Number.isFinite(want) && want >= 60 && want <= 900 ? { wantSec: Math.round(want) } : {}),
       };
-    } else if (count < 4 || count > 30) throw new Error("count must be from 4 to 30");
-    input = { eras: labels(b.eras, 20), genres: labels(b.genres, 30), vibe, seeds, artistOnly, targetMin, count: slot ? 1 : count, avoid, keep, ...(slot ? { slot } : {}) };
+    } else if (count < 4 || count > 34) throw new Error("count must be from 4 to 34");
+    const spares = Number.isInteger(b.spares) && (b.spares as number) >= 0 && (b.spares as number) <= 8 ? (b.spares as number) : 0;
+    input = { eras: labels(b.eras, 20), genres: labels(b.genres, 30), vibe, seeds, artistOnly, targetMin, count: slot ? 1 : count, spares: slot ? 0 : spares, avoid, keep, ...(slot ? { slot } : {}) };
   } catch (e) {
     return bad(e instanceof SyntaxError ? "Body must be JSON" : (e as Error).message);
   }

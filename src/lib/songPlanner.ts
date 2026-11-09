@@ -24,12 +24,16 @@ export interface SongPlanInput {
   avoid: string[];
   /** Songs already in the playlist, with their artist, so a swap does not double up. */
   keep: { artist: string; title: string }[];
+  /** How many of `count` are spares (alternates the app may drop once real lengths are known). */
+  spares?: number;
   /** One song for one position. Without it the whole list is planned. */
   slot?: Slot;
 }
 
 export interface PlannedSong {
   title: string; artist: string; intensity: number; genre?: string; era?: string; reason?: string; approxDurationSec?: number;
+  /** An alternate that fits the arc but can be dropped. */
+  spare?: boolean;
 }
 
 const VIBE_NOTES: Record<string, string> = {
@@ -45,6 +49,7 @@ The list is one ordered playlist with an energy arc:
 - The last song starts the 2-minute cool-down, so it is calm and easy, intensity 1-4, and at least 2:00 long (longer is fine).
 - The songs in between rise and fall. Mix steady grooves (intensity 4-6), heavy driving songs (intensity 7: good for a long climb) and explosive songs with a clear steady beat (intensity 8-10: good for sprint and tabata intervals). Put a calmer song after a hard one so the rider can recover. Never stack more than two hard songs in a row.
 - Intensity is 1 (very easy) to 10 (all out) and describes how hard the song feels to ride to.
+- Real song lengths are looked up after you answer, and the app then picks the warm-up and the cool-down song from your list by length. So include at least three easy songs (intensity 2-4) that run 2:30 to 3:30, and at least two calm songs (intensity 1-4) of 2:00 or longer, so there is a real choice. Prefer the shorter, tighter version of a song for those.
 
 Style:
 - The user may choose eras (decades) and genres. Songs must come from the chosen eras and genres. If none are chosen, any era or genre is fine.
@@ -91,7 +96,9 @@ export function buildSongMessage(i: SongPlanInput): string {
     if (s.after) L.push(`It is followed by: ${s.after}`);
     L.push("Pick a song with a different artist from every song already chosen, and set its intensity to fit its place in the arc.");
   } else {
-    L.push("", `Return exactly ${i.count} songs, in playing order, following the energy arc. Together they should run about ${i.targetMin} minutes once the last song is cut to a 2-minute cool-down (about ${Math.round((i.targetMin * 60 - 120) / 60)} minutes before the last song).`);
+    const spares = Math.max(0, Math.min(i.spares ?? 0, i.count - 3));
+    L.push("", `Return exactly ${i.count} songs, in playing order, following the energy arc. ${i.count - spares} of them make the ride: together they should run about ${i.targetMin} minutes once the last song is cut to a 2-minute cool-down (about ${Math.round((i.targetMin * 60 - 120) / 60)} minutes before the last song).`);
+    if (spares) L.push(`The other ${spares} are spares: alternates that also fit the arc (make at least two of them easy 2:30-3:30 songs or calm songs over 2:00) and may be dropped. Set spare true on exactly those ${spares}, and spare false on the rest. Keep spares in the playing order too.`);
   }
   if (i.keep.length) {
     L.push("", "Songs already in the playlist (do not repeat them or their artists):");
@@ -115,9 +122,9 @@ export function songSchema(i: Pick<SongPlanInput, "genres" | "eras" | "artistOnl
           type: "object",
           properties: {
             title: { type: "string" }, artist: { type: "string" }, intensity: { type: "integer" },
-            genre: label(i.genres), era: label(i.eras), approxDurationSec: { type: "integer" }, reason: { type: "string" },
+            genre: label(i.genres), era: label(i.eras), approxDurationSec: { type: "integer" }, reason: { type: "string" }, spare: { type: "boolean" },
           },
-          required: ["title", "artist", "intensity", "genre", "era", "approxDurationSec", "reason"],
+          required: ["title", "artist", "intensity", "genre", "era", "approxDurationSec", "reason", "spare"],
           additionalProperties: false,
         },
       },
@@ -155,6 +162,7 @@ export function sanitizeSongs(raw: unknown, i: SongPlanInput): PlannedSong[] {
       title, artist, intensity: clamp(Number(r.intensity) || 5, 1, 10),
       ...(genre ? { genre } : {}), ...(era ? { era } : {}), ...(reason ? { reason } : {}),
       ...(Number.isFinite(dur) && dur > 0 ? { approxDurationSec: clamp(dur, 60, 600) } : {}),
+      ...(r.spare === true ? { spare: true } : {}),
     });
   }
   return out.slice(0, i.slot ? 1 : i.count);

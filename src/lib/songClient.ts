@@ -1,11 +1,11 @@
 /** Browser-side calls for the song-first flow. */
 import type { SongCandidate, SongDraft } from "./builderV2";
 
-export interface PlannedSongLite { title: string; artist: string; intensity: number; genre?: string; era?: string; reason?: string; approxDurationSec?: number }
+export interface PlannedSongLite { title: string; artist: string; intensity: number; genre?: string; era?: string; reason?: string; approxDurationSec?: number; spare?: boolean }
 
 export interface PlanBody {
   eras: string[]; genres: string[]; vibe: string; seeds: string; artistOnly: boolean; targetMin: number;
-  count?: number; avoid: string[]; keep: { artist: string; title: string }[];
+  count?: number; spares?: number; avoid: string[]; keep: { artist: string; title: string }[];
   slot?: { index: number; total: number; before?: string; after?: string; wantSec?: number };
 }
 

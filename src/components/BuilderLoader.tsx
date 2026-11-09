@@ -47,7 +47,7 @@ export default function BuilderLoader({ id }: { id: string }) {
   }, [id, from]);
 
   if (id !== "new") return <RideDetails id={id} />;
-  if (state) return <Builder initial={state.draft} tab={tab} heard={state.heard} notice={state.notice} />;
+  if (state) return <Builder initial={state.draft} tab={tab} heard={state.heard} notice={state.notice} restorable={!from} />;
   return (
     <Stage bg="#002A33">
       <div className="flex h-full flex-col items-center justify-center gap-6 text-center">

@@ -16,21 +16,23 @@ export default function SegmentCard({ s, i, song, startSec, lenSec, end, on, rep
   const finalRest = (Number(s.restSec) || 0) + (Number(s.adjust) || 0);
   return (
     <div className="flex flex-col gap-3 rounded-[18px] border-2 border-line bg-tile p-4">
-      <div className="flex items-center gap-3">
-        <span className="w-6 text-center text-[15px] font-medium text-mist">{i + 1}</span>
+      <div className="flex items-start gap-3">
+        <span className="w-6 pt-[2px] text-center text-[15px] font-medium text-mist">{i + 1}</span>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-          <span className="truncate text-[16px] font-normal">{song.title}</span>
-          <span className="truncate text-[14px] font-light text-mist">{song.artist}{song.durationSec ? ` · ${fmtClock(song.durationSec)}` : ""}{song.intensity ? ` · feels ${song.intensity}/10` : ""}</span>
+          <span className="truncate text-[18px] font-normal">{song.title}</span>
+          <span className="truncate text-[14px] font-light text-mist">{song.artist}{song.intensity ? ` · feels ${song.intensity}/10` : ""}</span>
         </div>
+        <div className="flex flex-col items-end">
+          <span className="text-[22px] font-light leading-none">{lenSec !== undefined ? fmtClock(lenSec) : "—"}</span>
+          {startSec !== undefined && <span className="text-[14px] font-light text-mist">starts {fmtClock(startSec)}</span>}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 pl-9">
         {end ? (
           <span className="rounded-full border-2 border-ice px-4 py-[6px] text-[14px] font-medium uppercase tracking-[.12em] text-ice">{end === "first" ? "Warm-up" : "Cool-down"}</span>
         ) : (
           <Choice aria="Segment type" value={s.type} on={changeType} options={[{ v: "flat", text: "Flat" }, { v: "hill", text: "Hill" }, { v: "interval", text: "Interval" }]} />
         )}
-        <div className="flex w-[110px] flex-col items-end">
-          <span className="text-[22px] font-light leading-none">{lenSec !== undefined ? fmtClock(lenSec) : "—"}</span>
-          {startSec !== undefined && <span className="text-[14px] font-light text-mist">starts {fmtClock(startSec)}</span>}
-        </div>
         {!end && repeat && <button onClick={repeat} className="h-11 rounded-full border-2 border-line px-4 text-[14px] text-ink" aria-label="Same as the segment above">Same as above</button>}
       </div>
 

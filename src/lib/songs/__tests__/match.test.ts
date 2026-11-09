@@ -27,6 +27,13 @@ describe("bad versions", () => {
   it("skips a remix single even when the title is clean", () => {
     expect(badVersion({ title: "Mama Said Knock You Out", album: "Mama Said Knock You Out (Sam Wilkes Remix)" }, "Mama Said Knock You Out")).toBe(true);
   });
+  it("keeps a year's own mix but skips club and dance mixes", () => {
+    expect(badVersion({ title: "Wild Horses (2009 Mix)", album: "Sticky Fingers (Super Deluxe)" }, "Wild Horses")).toBe(false);
+    expect(badVersion({ title: "Start Me Up (Stereo Mix)", album: "Tattoo You" }, "Start Me Up")).toBe(false);
+    expect(badVersion({ title: "Rapture (Special Disco Mix / Remastered 2001)", album: "x" }, "Rapture")).toBe(true);
+    expect(badVersion({ title: "Push It (Club Mix)", album: "x" }, "Push It")).toBe(true);
+    expect(badVersion({ title: "Push It (Remix)", album: "x" }, "Push It")).toBe(true);
+  });
   it("keeps remasters and album tracks", () => {
     expect(badVersion({ title: "Rapture (Remastered 2001)", album: "Autoamerican (Remastered 2001)" }, "Rapture")).toBe(false);
     expect(badVersion({ title: "Bohemian Rhapsody", album: "A Night At The Opera" }, "Bohemian Rhapsody")).toBe(false);

@@ -13,6 +13,10 @@ export interface SongDraft extends Omit<RideTrack, "segmentIndex"> {
   key: string;
   /** 1-10 by feel, from the planner. Only used to suggest segment types. */
   intensity?: number;
+  /** Position in the planner's energy arc; the arrangement keeps this order. */
+  pos?: number;
+  /** An alternate the planner offered (dropped first when trimming to the target). */
+  spare?: boolean;
   locked?: boolean;
   /** Lookup state (never saved). */
   status?: "pending" | "ok" | "cached" | "doubtful" | "missing";
@@ -57,6 +61,8 @@ export interface RideDraft {
   segments: SegDraft[];
   /** The master song list, in order. Segments take songs from it front to back by their songCount. */
   songs: SongDraft[];
+  /** Songs left out of the ride (spares, songs the catalog could not size). They return if the target changes. */
+  bench: SongDraft[];
   stretches?: Stretch[];
   /** Set when this is a converted copy of a read-only v1 ride. */
   sourceId?: string;
@@ -109,7 +115,7 @@ export const TEMPLATES: Template[] = [
 ];
 
 export function emptyDraft(): RideDraft {
-  return { name: "", genre: "", vibe: "Classic", playlistUrl: "", targetMin: 30, eras: [], genres: [], seeds: "", artistOnly: false, segments: [], songs: [] };
+  return { name: "", genre: "", vibe: "Classic", playlistUrl: "", targetMin: 30, eras: [], genres: [], seeds: "", artistOnly: false, segments: [], songs: [], bench: [] };
 }
 
 const split = (t: Target | undefined): [string, string] =>
@@ -141,7 +147,7 @@ export function fromRide(r: Ride): RideDraft {
   });
   return {
     name: r.name, genre: r.genre ?? "", vibe: r.vibe ?? "", playlistUrl: r.playlistUrl ?? "", targetMin: Math.min(90, Math.max(10, Math.floor(rideDuration(r) / 60) || 30)), eras: r.eras ?? [], genres: r.genres ?? [], seeds: r.seeds ?? "", artistOnly: r.artistOnly === true,
-    segments, songs, stretches: r.stretches, sourceId: r.sourceId,
+    segments, songs, bench: [], stretches: r.stretches, sourceId: r.sourceId,
   };
 }
 
@@ -330,7 +336,7 @@ export function applyFit(d: RideDraft, opts: FitOptions = {}): FitOutcome {
 
 
 // ---- song-first ride: one song per segment ----------------------------------
-import { COOLDOWN_SEC, suggestSegments, type Suggested } from "./songFlow";
+import { COOLDOWN_SEC, arrange, suggestSegments, type Arranged, type Suggested } from "./songFlow";
 import type { PlannedSongLite } from "./songClient";
 
 const mid = (kind: "recover" | "steady"): Partial<SegDraft> => kind === "recover"
@@ -363,21 +369,22 @@ export function normalizeEnds(d: RideDraft): RideDraft {
 
 /** The planner's songs become the draft's songs, with a suggested segment for each. */
 export function setPlanned(d: RideDraft, planned: PlannedSongLite[]): RideDraft {
-  const songs: SongDraft[] = planned.map((p) => ({
-    key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec, status: "pending",
-  }));
+  const songs: SongDraft[] = planned.map((p, i) => ({ ...newSong(p), pos: i }));
   const segments = suggestSegments(songs.map((x) => x.intensity)).map(segmentFor);
-  return normalizeEnds({ ...d, songs, segments });
+  return normalizeEnds({ ...d, songs, bench: [], segments });
 }
 
 export const newSong = (p: PlannedSongLite): SongDraft => ({
-  key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec, status: "pending",
+  key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec,
+  ...(p.spare ? { spare: true } : {}), status: "pending",
 });
 
 /** Put a new song at `index` (its segment comes with it, from the song's intensity). */
 export function insertSong(d: RideDraft, index: number, song: SongDraft): RideDraft {
   const at = Math.max(0, Math.min(index, d.songs.length));
-  const songs = d.songs.slice(); songs.splice(at, 0, song);
+  const before = d.songs[at - 1]?.pos, after = d.songs[at]?.pos;
+  const pos = before !== undefined && after !== undefined ? (before + after) / 2 : before !== undefined ? before + 1 : after !== undefined ? after - 1 : at;
+  const songs = d.songs.slice(); songs.splice(at, 0, { ...song, pos });
   const segments = d.segments.slice();
   const [sg] = suggestSegments([undefined, song.intensity, undefined]).slice(1);
   segments.splice(at, 0, segmentFor(sg));
@@ -386,7 +393,7 @@ export function insertSong(d: RideDraft, index: number, song: SongDraft): RideDr
 
 /** Swap the song at `index` for another; the segment stays, so the rider's settings survive a swap. */
 export function replaceSong(d: RideDraft, index: number, song: SongDraft): RideDraft {
-  const songs = d.songs.slice(); songs[index] = song;
+  const songs = d.songs.slice(); songs[index] = { ...song, pos: d.songs[index]?.pos ?? song.pos };
   return { ...d, songs };
 }
 
@@ -414,4 +421,17 @@ export const aligned = (d: RideDraft) => d.songs.length > 0 && d.songs.length ==
 export function fitDraft(d: RideDraft): FitOutcome {
   if (!aligned(d)) return { draft: d, errors: ["Plan the songs first: every song gets one segment."], warnings: [], unused: 0 };
   return applyFit(normalizeEnds(d), { cooldownSec: COOLDOWN_SEC });
+}
+
+/**
+ * Pick and order the ride from real lengths: the warm-up and the last song come from the pool by length, the middle keeps
+ * the planner's order and is trimmed to the target window. Left-out songs wait on the bench.
+ */
+export function arrangeDraft(d: RideDraft): { draft: RideDraft; arranged: Arranged<SongDraft> } {
+  const pool = [...d.songs, ...d.bench];
+  const arranged = arrange(pool, d.targetMin);
+  const same = arranged.songs.length === d.songs.length && arranged.songs.every((x, i) => x.key === d.songs[i].key);
+  let next: RideDraft = { ...d, songs: arranged.songs, bench: arranged.bench };
+  if (!same) next = suggestAll(next);
+  return { draft: next, arranged };
 }

@@ -23,10 +23,12 @@ export interface Match {
   reason?: string;
 }
 
-/** Lengths further apart than this between two plausible versions make a match doubtful. */
-export const DOUBT_SEC = 10;
-/** A rival version only counts if it is at least this fraction as popular as the best one. */
-export const RIVAL_RANK = 0.25;
+/** Two versions whose lengths differ by more than this are really different cuts (drift of a few seconds is fine). */
+export const DOUBT_SEC = 25;
+/** Versions within this many seconds are the same recording listed on different releases. */
+export const CLUSTER_SEC = 5;
+/** A rival cut only makes a match doubtful if its releases are at least this popular, together, compared with the best cut's. */
+export const RIVAL_WEIGHT = 0.5;
 
 export const dense = (s: string) =>
   s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
@@ -48,8 +50,10 @@ export function artistMatches(candidate: string, wanted: string): boolean {
   return !!a && !!b && (a === b || (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a))));
 }
 
-const BAD_WORDS = ["demo", "instrumental", "karaoke", "tribute", "cover", "remix", "mix", "extended", "acoustic", "medley", "ringtone", "lullaby", "nightcore", "reverb", "workout", "version"];
-const BAD_PHRASES = [/made famous/i, /originally performed/i, /in the style of/i, /8-?bit/i, /sped up/i, /slowed/i, /a cappella/i, /\bcappella\b/i];
+const BAD_WORDS = ["demo", "instrumental", "karaoke", "tribute", "cover", "remix", "extended", "megamix", "mashup", "acoustic", "medley", "ringtone", "lullaby", "nightcore", "reverb", "workout", "version"];
+/** A mix is fine when it is the year's or the era's own mix ("2009 Mix", "Stereo Mix", "Single Mix"); club and dance mixes are not. */
+const BAD_MIX = /\b(?:club|dub|disco|dance|special|extended|12"?|maxi|party|radio|house|vocal|instrumental|acapella|a cappella|bonus)\s+mix\b/i;
+const BAD_PHRASES = [BAD_MIX, /made famous/i, /originally performed/i, /in the style of/i, /8-?bit/i, /sped up/i, /slowed/i, /a cappella/i, /\bcappella\b/i];
 
 /** Version words that make a result the wrong recording, unless the wanted title itself uses them. */
 export function badVersion(c: Pick<Candidate, "title" | "album">, wanted: string): boolean {
@@ -81,10 +85,18 @@ export function chooseMatch(query: SongQuery, results: Candidate[]): Match {
   // Same album and length is the same listing twice.
   const seen = new Set<string>();
   const candidates = good.filter((c) => { const k = `${dense(c.album)}|${c.durationSec}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
-  const chosen = good[0];
-  const rival = good.find((c) => c.id !== chosen.id && c.rank >= chosen.rank * RIVAL_RANK && Math.abs(c.durationSec - chosen.durationSec) > DOUBT_SEC);
+  // Group releases of the same recording (lengths within a few seconds) and let popularity vote.
+  const groups: Candidate[][] = [];
+  for (const c of good) {
+    const g = groups.find((x) => Math.abs(x[0].durationSec - c.durationSec) <= CLUSTER_SEC);
+    if (g) g.push(c); else groups.push([c]);
+  }
+  const weight = (g: Candidate[]) => g.reduce((t, c) => t + c.rank + 1, 0);
+  groups.sort((a, b) => weight(b) - weight(a));
+  const chosen = groups[0][0];
+  const rival = groups.slice(1).find((g) => Math.abs(g[0].durationSec - chosen.durationSec) > DOUBT_SEC && weight(g) >= weight(groups[0]) * RIVAL_WEIGHT);
   if (rival) {
-    return { status: "doubtful", chosen, candidates, reason: `Versions differ: ${fmt(chosen.durationSec)} vs ${fmt(rival.durationSec)}.` };
+    return { status: "doubtful", chosen, candidates, reason: `Versions differ: ${fmt(chosen.durationSec)} vs ${fmt(rival[0].durationSec)}.` };
   }
   if (chosen.durationSec < 60 || chosen.durationSec > 900) {
     return { status: "doubtful", chosen, candidates, reason: `Length ${fmt(chosen.durationSec)} looks wrong.` };

@@ -77,3 +77,78 @@ describe("naming, counts, suggestions", () => {
     expect(s[5]).toEqual({ kind: "interval", work: "resistance" });
   });
 });
+
+import { arrange, soundtrackProblems, type PoolSong } from "../songFlow";
+const P = (title: string, durationSec: number | undefined, intensity: number, over: Partial<PoolSong> = {}): PoolSong => ({ title, durationSec, intensity, ...over });
+
+describe("arrange", () => {
+  it("opens with the easy 2:30-3:30 song wherever it sat, and moves the calmest long song last", () => {
+    const pool = [
+      P("Wild Horses", 340, 3), P("Groove", 220, 5), P("Climb", 300, 7), P("Sprint", 230, 9),
+      P("Start Me Up", 205, 3), P("Mellow", 260, 2), P("Push", 250, 8), P("Cheer", 200, 6),
+    ];
+    const a = arrange(pool, 20); // window 20:00-22:00
+    expect(a.songs[0].title).toBe("Start Me Up");
+    expect(a.songs[a.songs.length - 1].title).toBe("Mellow");
+    expect(a.check.state).toBe("ok");
+    expect(a.check.rideSec).toBeGreaterThanOrEqual(1200);
+    expect(a.check.rideSec).toBeLessThanOrEqual(1320);
+    // the middle keeps the planner's order
+    const mid = a.songs.slice(1, -1).map((s) => s.title);
+    const order = pool.map((s) => s.title);
+    expect(mid).toEqual([...mid].sort((x, y) => order.indexOf(x) - order.indexOf(y)));
+  });
+
+  it("accepts a warm-up a few seconds over 3:30 when nothing is inside the range", () => {
+    const a = arrange([P("Start Me Up", 211, 3), P("B", 240, 5), P("C", 250, 6), P("D", 130, 2)], 10);
+    expect(a.songs[0].title).toBe("Start Me Up");
+    expect(checkSongs(songs(211, 240, 300), 8).issues.filter((i) => i.kind === "first-length")).toEqual([]);
+  });
+
+  it("leaves out songs with no length and drops spares first", () => {
+    const pool = [P("A", 180, 3), P("B", 240, 5), P("C", undefined, 6), P("D", 240, 7, { spare: true }), P("E", 240, 8), P("F", 240, 9), P("G", 200, 2)];
+    const a = arrange(pool, 12); // 12:00-14:00; base 180+120 -> middle needs 420..540
+    expect(a.songs.map((s) => s.title)).not.toContain("C");
+    expect(a.bench.map((s) => s.title)).toContain("C");
+    expect(a.check.state).toBe("ok");
+    expect(a.songs.map((s) => s.title)).not.toContain("D"); // the spare goes before a real song
+  });
+
+  it("never lands short when it can land over, and says so when nothing fits the window", () => {
+    const pool = [P("A", 180, 3), P("B", 300, 5), P("C", 300, 6), P("D", 200, 2)];
+    const a = arrange(pool, 60);
+    expect(a.ok).toBe(false);
+    expect(a.problem).toBe("window");
+    expect(a.check.state).toBe("short"); // all songs kept
+    expect(a.songs.length).toBe(4);
+  });
+
+  it("reports when no song can be the warm-up or the cool-down", () => {
+    expect(arrange([P("A", 340, 3), P("B", 330, 4), P("C", 320, 5)], 10).problem).toBe("no-warmup");
+    expect(arrange([P("A", 180, 3), P("B", 100, 4)], 10).problem).toBe("no-cooldown");
+  });
+
+  it("keeps locked songs", () => {
+    const pool = [P("A", 180, 3), P("B", 240, 5, { locked: true, spare: true }), P("C", 240, 6), P("D", 240, 7), P("E", 240, 2)];
+    const a = arrange(pool, 12); // middle needs 420..540: two of B,C,D
+    expect(a.songs.map((s) => s.title)).toContain("B");
+  });
+});
+
+describe("what blocks saving the soundtrack", () => {
+  const ok = checkSongs(songs(180, 240, 240, 300), 13);
+  it("is empty when everything is in order", () => {
+    expect(soundtrackProblems({ name: "x", songs: songs(180, 240, 240, 300), targetMin: 13, check: ok })).toEqual([]);
+  });
+  it("lists every problem in plain words", () => {
+    const list = songs(340, 240, 240, 100) as PoolSong[];
+    list[1] = { ...list[1], status: "doubtful" };
+    const c = checkSongs(list, 20);
+    const p = soundtrackProblems({ name: " ", songs: list, targetMin: 20, check: c });
+    expect(p.join(" | ")).toMatch(/Name the playlist/);
+    expect(p.join(" | ")).toMatch(/Confirm 1 version/);
+    expect(p.join(" | ")).toMatch(/warm-up song is 5:40/);
+    expect(p.join(" | ")).toMatch(/last song is 1:40/);
+    expect(p.join(" | ")).toMatch(/short of 20 min/);
+  });
+});
