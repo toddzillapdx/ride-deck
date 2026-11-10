@@ -124,6 +124,19 @@ describe("rides", () => {
     expect(w.tracklist?.[0].title).toBe("n");
   });
 
+  it("saving or clearing just the playlist link changes the link and the column, nothing else", async () => {
+    const db = fake();
+    withRow(db, "r1");
+    await patchRideMeta("r1", { playlistUrl: "https://music.amazon.com/user-playlists/abc" }, db.asClient());
+    expect(db.table("rides")[0].playlist_url).toBe("https://music.amazon.com/user-playlists/abc");
+    expect((db.table("rides")[0].workout as Ride).segments).toEqual(v2.segments);
+    expect((await getRide("r1", db.asClient())).playlistUrl).toBe("https://music.amazon.com/user-playlists/abc");
+    await patchRideMeta("r1", { playlistUrl: "" }, db.asClient());
+    expect(db.table("rides")[0].playlist_url).toBeNull();
+    expect((await getRide("r1", db.asClient())).playlistUrl).toBeUndefined();
+    await expect(patchRideMeta("r1", { playlistUrl: "javascript:alert(1)" }, db.asClient())).rejects.toThrow(/http/);
+  });
+
   it("patchRideMeta converts a stored v1 ride in place (same id, no copy)", async () => {
     const db = fake();
     db.seed("rides", [{ id: "oldv1", ...workoutToRow(v1) }]);

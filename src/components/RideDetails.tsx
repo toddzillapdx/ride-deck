@@ -4,6 +4,7 @@ import Stage from "./Stage";
 import { fmtClock, fmtTarget } from "@/lib/format";
 import { loadRideEx } from "@/lib/client";
 import { isPresetId } from "@/lib/presets";
+import { extractUrl, isHttpUrl, pasteLink } from "@/lib/url";
 import { rideDuration, segmentDuration, validateRide, type Ride, type RideSegment } from "@/lib/engine";
 
 const ROLE = { warmup: "Warm-up", steady: "Steady", recover: "Recover", cooldown: "Cool-down" } as const;
@@ -19,10 +20,29 @@ export default function RideDetails({ id }: { id: string }) {
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [link, setLink] = useState("");
+  const [savingLink, setSavingLink] = useState(false);
 
   useEffect(() => {
-    loadRideEx(id).then((r) => { setRide(r.ride); }).catch((e: Error) => setError(e.message));
+    loadRideEx(id).then((r) => { setRide(r.ride); setLink(r.ride.playlistUrl ?? ""); }).catch((e: Error) => setError(e.message));
   }, [id]);
+
+  /** Saves just the playlist link on this ride (an empty box removes it). Leaves the segments and songs alone. */
+  async function saveLink() {
+    if (!ride) return;
+    const url = extractUrl(link) || link.trim();
+    if (url && !isHttpUrl(url)) { setMsg("That doesn't look like a link. Paste the Amazon Music playlist link."); return; }
+    setSavingLink(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/rides/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playlistUrl: url }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg(`Link not saved: ${body.error ?? res.status}`); return; }
+      setRide({ ...ride, playlistUrl: url || undefined });
+      setLink(url);
+      setMsg(url ? "Playlist link saved. It now shows on the ride screen." : "Playlist link removed.");
+    } catch (e) { setMsg(`Link not saved: ${(e as Error).message}`); }
+    finally { setSavingLink(false); }
+  }
 
   async function remove() {
     if (!ride || !window.confirm(`Delete "${ride.name}"? This can't be undone.`)) return;
@@ -58,6 +78,17 @@ export default function RideDetails({ id }: { id: string }) {
             <a href={`/builder/new?from=${encodeURIComponent(id)}`} className="flex h-[52px] items-center rounded-full bg-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ground">Duplicate to edit</a>
           </div>
         </div>
+        {!builtIn && (
+          <div className="flex flex-none items-center gap-3">
+            <span className="flex-none text-[14px] font-medium uppercase tracking-[.14em] text-mist">Playlist</span>
+            <input value={link} onChange={(e) => setLink(e.target.value)} onPaste={(e) => pasteLink(e, setLink)} onBlur={() => setLink(extractUrl(link) || link.trim())}
+              placeholder="Paste the Amazon Music playlist link" inputMode="url" aria-label="Playlist link"
+              className="h-11 min-w-0 flex-1 rounded-[12px] border-2 border-line bg-tile px-3 text-[14px] text-ink outline-none focus:border-ice" />
+            <button onClick={saveLink} disabled={savingLink || (extractUrl(link) || link.trim()) === (ride.playlistUrl ?? "")}
+              className="h-11 flex-none rounded-full bg-ice px-6 text-[14px] font-medium text-ground disabled:opacity-40">{savingLink ? "Saving…" : "Save link"}</button>
+            {ride.playlistUrl && isHttpUrl(ride.playlistUrl) && <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 flex-none items-center rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice">Open ↗</a>}
+          </div>
+        )}
         {warnings.map((w, i) => <p key={i} className="m-0 text-[14px] text-ice">⚠ {w.message}</p>)}
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
           {ride.segments.map((s, i) => (
