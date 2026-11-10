@@ -11,6 +11,11 @@ export const dbConfigured = () => Boolean(process.env.SUPABASE_URL && process.en
 /** The schema this deploy reads and writes: "preview" on Vercel previews, "public" (production) when unset. */
 export const dbSchema = () => process.env.SUPABASE_DB_SCHEMA?.trim() || "public";
 
+/** The project address only: https://xxxx.supabase.co. A pasted .../rest/v1/ (or any path) is trimmed. */
+export function cleanUrl(raw: string): string {
+  try { return new URL(raw.trim()).origin; } catch { return raw.trim(); }
+}
+
 let cache: { sig: string; client: SupabaseClient } | null = null;
 
 /** The one client for this process. Throws NotConfigured when the env vars are missing. */
@@ -20,7 +25,7 @@ export function db(): SupabaseClient {
   const schema = dbSchema();
   const sig = `${url}|${schema}|${key.length}`;
   if (cache?.sig === sig) return cache.client;
-  const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, db: { schema } }) as unknown as SupabaseClient;
+  const client = createClient(cleanUrl(url), key, { auth: { persistSession: false, autoRefreshToken: false }, db: { schema } }) as unknown as SupabaseClient;
   cache = { sig, client };
   return client;
 }

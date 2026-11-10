@@ -4,6 +4,7 @@ import {
   NotFound, createLog, createRide, createRideV2, deleteLog, deleteRide, getRide, getRideRaw, getSettings, isV2, listLogs, listRides, logPatchToRow, logToRow,
   parseSettings, patchRideMeta, putSettings, rideToRow, rowToLog, rowToRaw, rowToWorkout, updateLog, updateRide, updateRideV2, workoutToRow, dbSchema, dbConfigured,
 } from "../db";
+import { cleanUrl } from "../db/client";
 import { readCache, writeCache, rowToSong, songToRow } from "../songs/cache";
 import { PRESETS } from "../presets";
 import { PRESETS_V2 } from "../presetsV2";
@@ -229,6 +230,15 @@ describe("song cache", () => {
     expect(rowToSong(songToRow(song))).toMatchObject({ key: "a|b", durationSec: 200, source: "deezer" });
     expect(rowToSong({ key: "x", duration_sec: 0 })).toBeNull();
     expect(rowToSong({ key: "x", duration_sec: 100, source: "typed" })?.source).toBe("typed");
+  });
+});
+
+describe("project url", () => {
+  it("keeps just the address, whatever was pasted", () => {
+    expect(cleanUrl("https://abc.supabase.co")).toBe("https://abc.supabase.co");
+    expect(cleanUrl("https://abc.supabase.co/rest/v1/")).toBe("https://abc.supabase.co");
+    expect(cleanUrl("  https://abc.supabase.co/  ")).toBe("https://abc.supabase.co");
+    expect(cleanUrl("not a url")).toBe("not a url");
   });
 });
 
