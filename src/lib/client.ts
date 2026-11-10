@@ -35,16 +35,14 @@ export interface LoadedRide {
   ride: Ride;
   /** Converted from a v1 ride on read. */
   converted: boolean;
-  /** Lives in the read-only legacy table: saving has to make a converted copy (with sourceId). */
-  legacy: boolean;
 }
 
-/** Like loadRide, but says whether the ride is a legacy original. */
+/** Like loadRide, but also says whether the ride was converted from v1 on read. */
 export async function loadRideEx(id: string): Promise<LoadedRide> {
-  if (isPresetId(id)) return { ride: await loadRide(id), converted: false, legacy: false };
+  if (isPresetId(id)) return { ride: await loadRide(id), converted: false };
   const res = await fetch(`/api/rides/${encodeURIComponent(id)}?format=raw`, { cache: "no-store" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `Couldn't load ride (${res.status})`);
   const r = readRide(body);
-  return { ride: r.ride, converted: r.converted, legacy: body.__legacy === true };
+  return { ride: r.ride, converted: r.converted };
 }

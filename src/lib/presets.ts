@@ -8,7 +8,7 @@ const seg = (
 const warm = (min: number) => seg("Warm-up", "warmup", min, 0, [70, 80], [20, 30], "Easy spin. Loosen up.");
 const cool = (min: number) => seg("Cool-down", "cooldown", min, 0, [65, 75], [15, 25], "Easy spin. Nice work.");
 
-/** Built-in rides. Read-only; they ship with the app and are never stored in Airtable. */
+/** Built-in rides. Read-only; they ship with the app and are never stored in the database. */
 export const PRESETS: Workout[] = [
   {
     id: "preset-beginner-20",

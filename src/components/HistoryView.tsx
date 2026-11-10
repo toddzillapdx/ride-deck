@@ -100,7 +100,7 @@ export default function HistoryView() {
         </div>
         {status !== "ok" ? (
           <div className="rounded-[16px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">
-            {status === "loading" ? "Loading…" : status === "off" ? "History needs Airtable. Set AIRTABLE_TOKEN and AIRTABLE_BASE_ID in Vercel." : `Couldn't load history${detail ? `: ${detail.slice(0, 120)}` : ""}`}
+            {status === "loading" ? "Loading…" : status === "off" ? "History needs the database. Set SUPABASE_URL and SUPABASE_SECRET_KEY in Vercel." : `Couldn't load history${detail ? `: ${detail.slice(0, 120)}` : ""}`}
           </div>
         ) : logs.length === 0 ? (
           <div className="rounded-[16px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">No rides yet. Finish a ride and it shows up here.</div>
@@ -162,7 +162,7 @@ export default function HistoryView() {
 
         {status !== "ok" ? (
           <div className="flex flex-1 items-center justify-center rounded-[20px] border-2 border-dashed border-line text-center text-[18px] text-mist">
-            {status === "loading" ? "Loading…" : status === "off" ? "History needs Airtable. Set AIRTABLE_TOKEN and AIRTABLE_BASE_ID in Vercel." : `Couldn't load history${detail ? `: ${detail.slice(0, 120)}` : ""}`}
+            {status === "loading" ? "Loading…" : status === "off" ? "History needs the database. Set SUPABASE_URL and SUPABASE_SECRET_KEY in Vercel." : `Couldn't load history${detail ? `: ${detail.slice(0, 120)}` : ""}`}
           </div>
         ) : logs.length === 0 ? (
           <div className="flex flex-1 items-center justify-center rounded-[20px] border-2 border-dashed border-line text-center text-[18px] text-mist">

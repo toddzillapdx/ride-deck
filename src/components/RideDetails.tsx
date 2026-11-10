@@ -17,12 +17,11 @@ function summary(s: RideSegment): string {
 /** An existing ride, read-only. To change it, DUPLICATE TO EDIT opens a copy in the builder. */
 export default function RideDetails({ id }: { id: string }) {
   const [ride, setRide] = useState<Ride | null>(null);
-  const [legacy, setLegacy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    loadRideEx(id).then((r) => { setRide(r.ride); setLegacy(r.legacy); }).catch((e: Error) => setError(e.message));
+    loadRideEx(id).then((r) => { setRide(r.ride); }).catch((e: Error) => setError(e.message));
   }, [id]);
 
   async function remove() {
@@ -52,7 +51,7 @@ export default function RideDetails({ id }: { id: string }) {
           <div className="flex min-w-0 flex-col gap-1">
             <a href="/" className="text-[14px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
             <span className="truncate text-[32px] font-light leading-tight">{ride.name}</span>
-            <span className="text-[14px] font-light text-mist">{fmtClock(rideDuration(ride))} · {ride.segments.length} segments{ride.genre ? ` · ${ride.genre}` : ""}{ride.vibe ? ` · ${ride.vibe}` : ""}{builtIn ? " · starter ride" : legacy ? " · original ride" : ""}</span>
+            <span className="text-[14px] font-light text-mist">{fmtClock(rideDuration(ride))} · {ride.segments.length} segments{ride.genre ? ` · ${ride.genre}` : ""}{ride.vibe ? ` · ${ride.vibe}` : ""}{builtIn ? " · starter ride" : ""}</span>
           </div>
           <div className="flex flex-none items-center gap-3">
             <a href={`/ride/${id}`} className="flex h-[52px] items-center rounded-full border-2 border-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ice">Ride</a>
@@ -74,7 +73,7 @@ export default function RideDetails({ id }: { id: string }) {
         </div>
         <div className="flex flex-none items-center justify-between">
           <span className="text-[14px] font-light text-mist">{msg ?? "To change this ride, duplicate it: the original stays as it is."}</span>
-          {!builtIn && !legacy && <button onClick={remove} className="h-11 rounded-full border-2 border-line px-6 text-[14px] text-mist">Delete ride</button>}
+          {!builtIn && <button onClick={remove} className="h-11 rounded-full border-2 border-line px-6 text-[14px] text-mist">Delete ride</button>}
         </div>
       </div>
     </Stage>

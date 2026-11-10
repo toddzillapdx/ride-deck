@@ -5,7 +5,7 @@ export class HistoryOff extends Error {}
 async function send(url: string, method: "POST" | "PATCH", body: unknown): Promise<RideLog> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const out = await res.json().catch(() => ({}));
-  if (res.status === 503) throw new HistoryOff("History isn't connected to Airtable");
+  if (res.status === 503) throw new HistoryOff("History isn't connected to the database");
   if (!res.ok) throw new Error(out.error ?? `Couldn't save (${res.status})`);
   return out as RideLog;
 }

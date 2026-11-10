@@ -81,7 +81,7 @@ export interface Stretch {
 export interface Ride {
   schemaVersion: 2;
   id: string;
-  /** The v1 ride this is a converted copy of. The library hides that original (it stays in the legacy table, read-only). */
+  /** The v1 ride this is a converted copy of. The library hides that original (converted copies replace their originals). */
   sourceId?: string;
   name: string;
   genre?: string;

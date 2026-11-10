@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, deleteLog, updateLog } from "@/lib/airtable";
+import { NotConfigured, NotFound, deleteLog, updateLog } from "@/lib/db";
 import { parseLogPatch } from "@/lib/history";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: { id: string } };
 
-const RECORD_ID = /^rec[A-Za-z0-9]{14}$/;
+/** Old rows keep their Airtable record id (rec...); new rows have a UUID. */
+const RECORD_ID = /^(rec[A-Za-z0-9]{14}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 const fail = (e: unknown) =>
-  e instanceof AirtableNotConfigured
+  e instanceof NotConfigured
     ? NextResponse.json({ error: e.message }, { status: 503 })
-    : NextResponse.json({ error: (e as Error).message }, { status: /Airtable 404/.test((e as Error).message) ? 404 : 502 });
+    : NextResponse.json({ error: (e as Error).message }, { status: e instanceof NotFound ? 404 : 502 });
 
 export async function PATCH(req: Request, { params }: Ctx) {
   if (!RECORD_ID.test(params.id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });

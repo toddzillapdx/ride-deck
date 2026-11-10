@@ -6,13 +6,13 @@ const read = (): string[] => { try { const v = JSON.parse(localStorage.getItem(K
 const write = (v: string[]) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* ignore */ } };
 
 /**
- * Which built-in starter rides the user has removed. Saved in Airtable when it is connected, so the choice follows
+ * Which built-in starter rides the user has removed. Saved in the database when it is connected, so the choice follows
  * you between phone and computer; always mirrored in localStorage so the page doesn't flash the removed rides.
  */
 export function useHiddenPresets() {
   const [hidden, setHidden] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
-  const [shared, setShared] = useState(false); // true when Airtable holds the setting
+  const [shared, setShared] = useState(false); // true when the database holds the setting
 
   useEffect(() => {
     setHidden(read());

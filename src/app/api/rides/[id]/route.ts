@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, deleteRide, getRide, getRideRaw, isV2, patchRideMeta, updateRide, updateRideV2 } from "@/lib/airtable";
+import { NotConfigured, NotFound, deleteRide, getRide, getRideRaw, isV2, patchRideMeta, updateRide, updateRideV2 } from "@/lib/db";
 import { parseRideV2 } from "@/lib/engine";
 import { getPreset, isPresetId } from "@/lib/presets";
 import { parseWorkout } from "@/lib/validate";
@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: { id: string } };
 
 const fail = (e: unknown) =>
-  e instanceof AirtableNotConfigured
+  e instanceof NotConfigured
     ? NextResponse.json({ error: e.message }, { status: 503 })
-    : NextResponse.json({ error: (e as Error).message }, { status: /Airtable 404/.test((e as Error).message) ? 404 : 502 });
+    : NextResponse.json({ error: (e as Error).message }, { status: e instanceof NotFound ? 404 : 502 });
 
 export async function GET(req: Request, { params }: Ctx) {
   // ?format=raw: the stored JSON untouched (v1 or v2). The ride screen converts v1 itself.
@@ -47,7 +47,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   try { await deleteRide(params.id); return NextResponse.json({ ok: true }); } catch (e) { return fail(e); }
 }
 
-/** PATCH: music-planner changes (tracklist, playlist link, style). Leaves the segments alone. A read-only legacy ride is copied as v2. */
+/** PATCH: music-planner changes (tracklist, playlist link, style). Leaves the segments alone. A stored v1 ride is converted in place. */
 export async function PATCH(req: Request, { params }: Ctx) {
   if (isPresetId(params.id)) return NextResponse.json({ error: "Presets are read-only. Save a copy first." }, { status: 403 });
   let meta;

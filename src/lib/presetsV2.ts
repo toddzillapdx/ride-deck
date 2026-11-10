@@ -1,6 +1,6 @@
 import type { FlatRole, HillSegment, IntervalSegment, Ride, RideSegment, Target } from "./engine";
 
-/** The built-in rides as native v2, with the same ids as the v1 starters in presets.ts. Read-only; never stored in Airtable. */
+/** The built-in rides as native v2, with the same ids as the v1 starters in presets.ts. Read-only; never stored in the database. */
 const flat = (role: FlatRole, name: string, sec: number, cadence: Target, effort: Target, cue: string): RideSegment => ({ type: "flat", role, name, durationSec: sec, cadence, effort, cue });
 const hill = (name: string, sec: number, cadence: Target, from: number, to: number, cue: string): HillSegment => ({ type: "hill", name, durationSec: sec, cadence, effortFrom: from, effortTo: to, cue });
 const interval = (name: string, kind: IntervalSegment["workKind"], ratio: "1:1" | "2:1", workSec: number, restSec: number, rounds: number, work: [Target, Target], cue: string): IntervalSegment => ({

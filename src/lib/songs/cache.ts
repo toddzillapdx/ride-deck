@@ -1,9 +1,8 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { db, dbConfigured } from "../db/client";
 import type { Candidate } from "./match";
 
-/** Server-side only. The Songs table in Airtable caches one row per song, so each song is looked up once. */
-const API = "https://api.airtable.com/v0";
-const TABLE = process.env.AIRTABLE_SONGS_TABLE || "Songs";
-
+/** Server-side only. The songs table caches one row per song, so each song is looked up once. Best effort: never throws. */
 export interface CachedSong {
   key: string; artist: string; title: string; durationSec: number;
   /** "deezer" (catalog) or "typed" (the rider's own number). */
@@ -11,66 +10,44 @@ export interface CachedSong {
   album?: string; deezerId?: string; isrc?: string; confirmed: boolean;
 }
 
-interface Rec { id: string; fields: Record<string, unknown> }
-
-function cfg() {
-  const token = process.env.AIRTABLE_TOKEN, base = process.env.AIRTABLE_BASE_ID;
-  if (!token || !base) return null;
-  return { token, base };
+interface SongRow {
+  key: string; artist?: string | null; title?: string | null; duration_sec?: number | null; source?: string | null;
+  album?: string | null; deezer_id?: string | null; isrc?: string | null; confirmed?: boolean | null; fetched_at?: string;
 }
 
-async function call(path: string, init: RequestInit = {}): Promise<any> {
-  const c = cfg();
-  if (!c) throw new Error("Airtable is not configured");
-  const res = await fetch(`${API}/${c.base}/${encodeURIComponent(TABLE)}${path}`, {
-    ...init, cache: "no-store",
-    headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!res.ok) throw new Error(`Airtable ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
-  return res.json();
-}
+export const songToRow = (s: CachedSong, now = new Date()): SongRow => ({
+  key: s.key, artist: s.artist, title: s.title, duration_sec: Math.round(s.durationSec), source: s.source,
+  album: s.album ?? null, deezer_id: s.deezerId ?? null, isrc: s.isrc ?? null, confirmed: s.confirmed, fetched_at: now.toISOString(),
+});
 
-const fromRec = (r: Rec): CachedSong | null => {
-  const f = r.fields;
-  if (typeof f.Key !== "string" || typeof f.DurationSec !== "number" || f.DurationSec <= 0) return null;
+export const rowToSong = (r: SongRow): CachedSong | null => {
+  if (typeof r.key !== "string" || typeof r.duration_sec !== "number" || r.duration_sec <= 0) return null;
   return {
-    key: f.Key, artist: String(f.Artist ?? ""), title: String(f.Title ?? ""), durationSec: Math.round(f.DurationSec),
-    source: f.Source === "typed" ? "typed" : "deezer",
-    ...(f.Album ? { album: String(f.Album) } : {}), ...(f.DeezerId ? { deezerId: String(f.DeezerId) } : {}), ...(f.Isrc ? { isrc: String(f.Isrc) } : {}),
-    confirmed: f.Confirmed === true,
+    key: r.key, artist: r.artist ?? "", title: r.title ?? "", durationSec: Math.round(r.duration_sec),
+    source: r.source === "typed" ? "typed" : "deezer",
+    ...(r.album ? { album: r.album } : {}), ...(r.deezer_id ? { deezerId: r.deezer_id } : {}), ...(r.isrc ? { isrc: r.isrc } : {}),
+    confirmed: r.confirmed === true,
   };
 };
 
-/** Cached rows for these keys. A cache failure is never fatal: the caller just looks the songs up again. */
-export async function readCache(keys: string[]): Promise<Map<string, CachedSong>> {
+/** Cached rows for these keys, in one query. A cache failure is never fatal: the caller just looks the songs up again. */
+export async function readCache(keys: string[], client?: SupabaseClient): Promise<Map<string, CachedSong>> {
   const out = new Map<string, CachedSong>();
-  if (!cfg() || !keys.length) return out;
+  if (!keys.length || (!client && !dbConfigured())) return out;
   try {
-    const esc = (k: string) => k.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    for (let i = 0; i < keys.length; i += 20) {
-      const part = keys.slice(i, i + 20);
-      const formula = `OR(${part.map((k) => `{Key}="${esc(k)}"`).join(",")})`;
-      const body = await call(`?${new URLSearchParams({ filterByFormula: formula, pageSize: "100" })}`);
-      for (const r of (body.records ?? []) as Rec[]) { const s = fromRec(r); if (s) out.set(s.key, s); }
-    }
+    const res = await (client ?? db()).from("songs").select("*").in("key", keys);
+    if (res.error) return out;
+    for (const r of (res.data ?? []) as SongRow[]) { const s = rowToSong(r); if (s) out.set(s.key, s); }
   } catch { /* cache unavailable */ }
   return out;
 }
 
-const fieldsOf = (s: CachedSong) => ({
-  Key: s.key, Artist: s.artist, Title: s.title, DurationSec: s.durationSec, Source: s.source,
-  Album: s.album ?? "", DeezerId: s.deezerId ?? "", Isrc: s.isrc ?? "", Confirmed: s.confirmed, FetchedAt: new Date().toISOString(),
-});
-
-/** Insert or update one song by key. Best effort. */
-export async function writeCache(s: CachedSong): Promise<boolean> {
-  if (!cfg()) return false;
+/** Insert or update one song by key, in one query. Best effort. */
+export async function writeCache(s: CachedSong, client?: SupabaseClient): Promise<boolean> {
+  if (!client && !dbConfigured()) return false;
   try {
-    const found = await call(`?${new URLSearchParams({ filterByFormula: `{Key}="${s.key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`, maxRecords: "1" })}`);
-    const existing = (found.records ?? [])[0] as Rec | undefined;
-    if (existing) await call(`/${existing.id}`, { method: "PATCH", body: JSON.stringify({ fields: fieldsOf(s), typecast: true }) });
-    else await call("", { method: "POST", body: JSON.stringify({ fields: fieldsOf(s), typecast: true }) });
-    return true;
+    const res = await (client ?? db()).from("songs").upsert(songToRow(s), { onConflict: "key" });
+    return !res.error;
   } catch { return false; }
 }
 

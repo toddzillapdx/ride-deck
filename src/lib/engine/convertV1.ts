@@ -1,7 +1,7 @@
 import { clampEffort } from "./effort";
 import { MIN_FINAL_REST_SEC, type FlatRole, type Ride, type RideSegment, type RideTrack, type Target } from "./types";
 
-/** The v1 shapes, as stored in Airtable before V1.5. */
+/** The v1 shapes, as stored before V1.5. */
 export interface V1Segment {
   name: string;
   type: "warmup" | "flat" | "climb" | "sprint" | "recover" | "cooldown";

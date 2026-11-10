@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { searchDeezer } from "./deezer";
 import { readCache, toCached, writeCache, type CachedSong } from "./cache";
 import { chooseMatch, songKey, type Candidate, type MatchStatus, type SongQuery } from "./match";
@@ -16,10 +17,10 @@ export interface Resolved {
 
 const MAX_SONGS = 40;
 
-export async function resolveSongs(queries: SongQuery[], search: (q: SongQuery) => Promise<Candidate[]> = searchDeezer): Promise<Resolved[]> {
+export async function resolveSongs(queries: SongQuery[], search: (q: SongQuery) => Promise<Candidate[]> = searchDeezer, client?: SupabaseClient): Promise<Resolved[]> {
   const list = queries.slice(0, MAX_SONGS);
   const keys = list.map(songKey);
-  const cache = await readCache([...new Set(keys)]);
+  const cache = await readCache([...new Set(keys)], client);
   const out: Resolved[] = new Array(list.length);
   const todo: number[] = [];
   list.forEach((q, i) => {
@@ -35,7 +36,7 @@ export async function resolveSongs(queries: SongQuery[], search: (q: SongQuery) 
         const m = chooseMatch(q, await search(q));
         if (m.status === "ok" && m.chosen) {
           out[i] = { artist: q.artist, title: q.title, key: keys[i], status: "ok", durationSec: m.chosen.durationSec, source: "deezer", album: m.chosen.album, candidates: m.candidates };
-          await writeCache(toCached(keys[i], m.chosen, false));
+          await writeCache(toCached(keys[i], m.chosen, false), client);
         } else {
           out[i] = { artist: q.artist, title: q.title, key: keys[i], status: m.status, reason: m.reason, candidates: m.candidates, ...(m.chosen ? { durationSec: m.chosen.durationSec, album: m.chosen.album, source: "deezer" as const } : {}) };
         }
@@ -48,10 +49,10 @@ export async function resolveSongs(queries: SongQuery[], search: (q: SongQuery) 
 }
 
 /** The rider picked a version (or typed a length). Remember it so the song is never asked about again. */
-export async function rememberSong(q: SongQuery, pick: { durationSec: number; candidate?: Candidate }): Promise<boolean> {
+export async function rememberSong(q: SongQuery, pick: { durationSec: number; candidate?: Candidate }, client?: SupabaseClient): Promise<boolean> {
   const key = songKey(q);
   const song: CachedSong = pick.candidate
     ? toCached(key, pick.candidate, true)
     : { key, artist: q.artist, title: q.title, durationSec: Math.round(pick.durationSec), source: "typed", confirmed: true };
-  return writeCache(song);
+  return writeCache(song, client);
 }

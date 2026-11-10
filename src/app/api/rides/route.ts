@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, airtableConfigured, createRide, createRideV2, listRides } from "@/lib/airtable";
+import { NotConfigured, createRide, createRideV2, dbConfigured, listRides } from "@/lib/db";
 import { parseRideV2 } from "@/lib/engine";
 import { parseWorkout } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
 
-/** GET: saved rides from Airtable. Presets ship with the client, so they are not returned here. */
+/** GET: saved rides from the database. Presets ship with the client, so they are not returned here. */
 export async function GET() {
-  if (!airtableConfigured()) return NextResponse.json({ configured: false, rides: [] });
+  if (!dbConfigured()) return NextResponse.json({ configured: false, rides: [] });
   try {
     const { rides, skipped } = await listRides();
     return NextResponse.json({ configured: true, rides, skipped });
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     try { ride = parseRideV2(body); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
     try { return NextResponse.json(await createRideV2(ride), { status: 201 }); }
     catch (e) {
-      if (e instanceof AirtableNotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
+      if (e instanceof NotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
       return NextResponse.json({ error: (e as Error).message }, { status: 502 });
     }
   }
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   try {
     return NextResponse.json(await createRide(workout), { status: 201 });
   } catch (e) {
-    if (e instanceof AirtableNotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
+    if (e instanceof NotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
 }

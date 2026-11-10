@@ -7,7 +7,7 @@ Ride coach for a Peloton Bike in "Just Ride" mode. A phone or tablet hangs over 
 |---|---|
 | 1. Skeleton, ride screen, drift-proof timer | done |
 | 2. Change-warning screen, tap-to-stay-awake | done |
-| 3. Airtable storage, library, presets, import/export | done (needs env vars set, see below) |
+| 3. Database storage (Supabase), library, presets, import/export | done (needs env vars set, see below) |
 | 4. Workout builder | done (rebuilt for V1.5) |
 | 5. Music planner | done (needs `ANTHROPIC_API_KEY`) |
 | 6. Ride summary and history | done (V1.5: stretch, finish, calories) |
@@ -22,11 +22,11 @@ See **V1.5: the v2 ride engine** below for the ride format, the effort scale and
 - **New ride / duplicate** (`/builder/new`, `/builder/new?from=<id>`) has two tabs: **BUILD RIDE** (segments, templates, songs, Fit to songs) and **PLAN MUSIC** (style, tracklist, copy prompt). One **Save ride** saves both.
 - Every segment starts at 4:00, and the templates are 4:00 too (Intervals 1:1 · 30/30 x 4, Tabata 2:1 · 40/20 x 4, Hill 4 min). Change any time with the minutes and seconds boxes.
 - The segment type (Flat, Hill, Interval), a flat segment's role, an interval's kind (Sprint or Resistance) and its ratio are buttons, not menus.
-- Saving needs Airtable to be configured.
+- Saving needs the database (Supabase) to be configured.
 
 ## Deleting rides
 
-- **Library:** every card has **Delete** (your own rides) or **Remove** (the built-in starter rides), with an in-app confirmation. Deleting your own ride removes it from Airtable for good; rides you already finished stay in History. Removing a starter ride hides it from the library and the music planner on every device. **Restore starter rides** at the bottom of the library brings them back. The choice is stored in one reserved row of the `Rides` table named `__settings__` (the app never shows it as a ride), or only on that device if Airtable isn't connected. Starter rides still open by id, so older History entries can still **Ride again**.
+- **Library:** every card has **Delete** (your own rides) or **Remove** (the built-in starter rides), with an in-app confirmation. Deleting your own ride removes it from the database for good; rides you already finished stay in History. Removing a starter ride hides it from the library and the music planner on every device. **Restore starter rides** at the bottom of the library brings them back. The choice is stored in the `app_settings` table (key `main`), or only on that device if the database isn't connected. Starter rides still open by id, so older History entries can still **Ride again**.
 - **History:** open a ride and tap **Delete ride**. It asks first, then removes it from History and from your totals.
 
 ## On a phone
@@ -42,7 +42,7 @@ This v1 idea (every sprint block auto-split into 1:00 on/off, every climb auto-r
 ## Ride summary and history
 When the last segment ends the ride does not stop. See **After the last segment** under V1.5: stretch, **FINISH RIDE**, calories, summary. A ride is recorded to History as soon as the segments end (or on an early end), updated at FINISH, and updated again when you save calories. History keeps a snapshot of each segment's targets, so later edits to a ride don't change the past; old rides' resistance shows as effort (resistance / 10).
 
-**Calories:** type the kcal from the bike on the number pad and Save, or Skip. RideDeck does not read it from the bike. It is a whole number from 0 to 5000. You can add or fix it later on **History** (`/history`), which lists rides newest first with totals, a per-ride chart (tap a segment for its numbers), **Ride again**, and **Delete entry**. If Airtable is unreachable the summary says so and offers Retry.
+**Calories:** type the kcal from the bike on the number pad and Save, or Skip. RideDeck does not read it from the bike. It is a whole number from 0 to 5000. You can add or fix it later on **History** (`/history`), which lists rides newest first with totals, a per-ride chart (tap a segment for its numbers), **Ride again**, and **Delete entry**. If the database is unreachable the summary says so and offers Retry.
 
 ## Music workflow
 
@@ -67,85 +67,13 @@ Import the repo in Vercel, framework preset Next.js, and set these in Project Se
 
 | Variable | Needed for |
 |---|---|
-| `AIRTABLE_TOKEN` | Saved rides. A personal access token with `data.records:read` and `data.records:write` on the RideDeck base only. |
-| `AIRTABLE_BASE_ID` | The RideDeck base (`app...`). |
+| `SUPABASE_URL` | The Supabase project URL (rides, history, song cache, settings). |
+| `SUPABASE_SECRET_KEY` | The project's secret (service-role) key. Server only. |
+| `SUPABASE_DB_SCHEMA` | Leave unset in Production (uses the `public` schema). Set to `preview` for Preview deploys. |
 | `ANTHROPIC_API_KEY` | Music planner. |
 | `PLANNER_PASSCODE` | Optional but recommended. If set, the planner API requires it (the planner screen asks once and remembers it in that browser). Without it anyone who finds the URL can spend your Anthropic credit. |
 
-Without the Airtable vars the app still works with the built-in presets, and the library shows "Airtable not configured". The `Rides` table needs the fields Name, Genre, Vibe, PlaylistUrl, TotalSeconds, WorkoutJson and UpdatedAt. `WorkoutJson` is the source of truth. History lives in a second table, `RideLog`, with Name, RideId, StartedAt, ElapsedSeconds, PlannedSeconds, SegmentsCompleted, SegmentsTotal, Kcal, Notes and SegmentsJson (the same token covers it).
-
-API: `GET/POST /api/rides`, `GET/PUT/DELETE /api/rides/[id]`, `POST /api/music/plan`, `GET/POST /api/history`, `PATCH/DELETE /api/history/[id]`. Presets are read-only (`preset-` ids).
-
-## On the Fire HD 10
-
-Open the deployed URL in Silk and bookmark it. Don't rely on PWA install. Screen Wake Lock is tried first and ignored if Silk lacks it. The real mechanism is the "TAP THE SCREEN" prompt at 10:00 and every 10 minutes after. Any tap dismisses it and resets the countdown.
-
-## Workout JSON
-Rides are stored as schema v2 (see **V1.5**). Starter rides are native v2 in `src/lib/presetsV2.ts` (same ids as the v1 starters in `src/lib/presets.ts`). The library's JSON export and import still use the old v1 shape.
-
-## V1.5: the v2 ride engine
-
-Developed on branch `ride-engine-v2` and deployed only as a Vercel preview. Production (`main`) is untouched until you ride the preview and say to promote it.
-
-### Effort replaces resistance
-
-Effort is a 1 to 10 scale judged by feel (the **?** on the effort tile and the **Effort guide** button on the start screen open it):
-
-| Effort | Word | Talk test |
-|---|---|---|
-| 1-2 | Easy | You could chat all day |
-| 3-4 | Comfortable | Full sentences |
-| 5-6 | Steady | Short sentences |
-| 7 | Hard | A few words at a time |
-| 8 | Very hard | Single words; holdable for minutes |
-| 9 | Near max | 30 to 60 seconds, tops |
-| 10 | All out | 10 to 20 seconds |
-
-Cadence stays an RPM target. "60-70 RPM at effort 8" means you turn your own knob until that cadence feels like an 8. For a range the word is for the upper end.
-
-### The v2 ride format
-
-`WorkoutJson` holds `schemaVersion: 2` and three segment types. A target is a number or a `[min, max]` range.
-
-- **Flat** (`type: "flat"`): steady `cadence` and `effort`, with `role` of `warmup`, `steady`, `recover` or `cooldown`, and `durationSec`.
-- **Interval** (`type: "interval"`): `workKind` (`sprint` is fast and light, `resistance` is heavy and slow), `ratio` (`1:1` is 30 on / 30 off, `2:1` is 40 on / 20 off, Tabata-style), `workSec`, `restSec`, `rounds`, optional `finalRestAdjustSec` (added to the last rest, may be negative, so the block can end on a song), and `work` / `rest`, each `{ cadence, effort }`. Length is `rounds * (workSec + restSec) + finalRestAdjustSec`.
-- **Hill** (`type: "hill"`): `effortFrom`, `effortTo`, `durationSec` and a steady `cadence`. Effort rises in even steps, one per level (5 to 8 is four levels, so a 4:00 hill is four 1:00 steps); optional `stepSec` overrides the step length.
-- Rides also carry `tracklist` entries (`segmentIndex`, `title`, `artist`, `durationSec`, `durationSource`), optional `stretches` (`{ name, holdSec }`), and `sourceId` when the ride is a converted copy of an old one.
-
-The ride engine is pure TypeScript with no React in `src/lib/engine/` (so it can be ported to Swift): `buildPhases`, `phaseAt`, `effortWord`, `validateRide`, `fitSegmentsToSongs`, `convertV1`, `readRide` and the clock core.
-
-### On the ride screen
-
-- **Layout:** the same for every segment type, so nothing jumps. A thin line across the top shows the whole ride as warm-up, one solid ride section and cool-down, with a marker for where you are. Under it are elapsed and left, the segment's name ("Intervals · Resistance"), the phase countdown, then effort and cadence stacked (portrait) or side by side (landscape). "Was 5 · up 2" appears under a tile only when it changed.
-- **Hills:** the effort tile shows the current step, "Up to 7 in 0:20" and a progress bar with one slice per step. Before each step-up the giant 3-2-1 appears ("CLIMB INCREASE NEXT"), then the effort number pulses for 2 seconds. There is no full-screen flip between steps.
-- **Segment change:** in the last 10 seconds of a segment (only at a segment boundary) the screen flips to ice and shows **HARDER ↑ / EASIER ↓ / SAME** and **FASTER / SLOWER / SAME**.
-- **Intervals:** the label reads "Intervals · Sprint" (or Resistance) with a small WORK or REST pill by it, and thin notches under the timer show the rounds. WORK tints the screen ice and REST is the normal dark screen, but effort and cadence never move. A giant **3-2-1** covers the last 3 seconds of every phase and says what comes next ("REST NEXT"). The 10-second flip is not used inside an interval.
-- **Bottom of the screen:** "Next REST" (one word: the type of what comes next), the song that should be playing now, **Pause**, **Playlist** (only if the ride has a link) and **More** (previous or skip a segment, or hold to end).
-- **Keep the screen awake:** the start screen suggests Auto-Lock › Never. RideDeck also asks the phone to stay awake. Only if the phone refuses does a "Tap the screen" reminder appear.
-- The thresholds and colors (10 s flip, 3 s countdown, WORK/REST colors) are named constants in `src/lib/rideTheme.ts`.
-
-### After the last segment
-
-1. **Stretch:** the timer becomes a count-up "STRETCH 0:00", music keeps playing, and a list of stretches (Quads, Hamstrings, Calves, Hip flexors, Glutes, Chest and shoulders, or the ride's own `stretches`) has an optional 30 second visual timer on each.
-2. **FINISH RIDE** is always visible and needs no hold.
-3. **Calories:** a number pad with Save and a small Skip.
-4. Ending early (the hold-to-confirm End ride) goes to the same Calories screen, marked **ended early**.
-5. A summary shows total time (ride and stretch), calories if given, and Ride again / Library / History.
-
-History gains three fields on the `RideLog` table: `EndedEarly` (checkbox), `RideSeconds` and `StretchSeconds` (numbers). They are additive.
-
-### Authoring a ride (V2: music first, then the ride)
-
-The songs decide the ride. Two steps in the builder (`/builder/new`):
-
-1. **Music.** Name the playlist, choose a length (20, 30, 45 or your own minutes), pick era, genre and vibe, and press **Plan songs**. Claude returns an ordered list with an energy arc: song 1 is an easy 2:30 to 3:30 warm-up, the last song is calm and at least 2:00, and the middle rises and falls. Each song gets a 1 to 10 "feels like" number.
-2. **Real lengths** come from the Deezer catalog (metadata only, no audio), never from the AI. Each song is looked up once and saved in the Airtable `Songs` table (artist + title key, length, album, source, whether you confirmed it), so repeat songs are instant. The match prefers the original album track and skips live, demo, instrumental, remix, karaoke and tribute versions. If plausible versions disagree by more than 10 seconds (Blondie's Rapture is 5:36, 5:31 or 6:31 depending on the release), the song is flagged and you tap the right version; your choice is saved. You can also tap any length and type your own (saved as "typed").
-3. **Length rule.** The ride is every song except the last, plus a 2:00 cool-down that starts as the last song starts. It must be at least the target and at most 2:00 over (30 min means 30:00 to 32:00, never 28). **Auto-adjust length** swaps a middle song for a longer or shorter one, adds a song before the last, or drops one, then re-checks. **Swap**, **+ Add a song**, lock and remove are available per song.
-4. **Copy prompt + playlist** gives Claude in Chrome the songs with album and length, so it picks the matching version in Amazon Music. Paste the playlist link back.
-5. **Plan ride.** Every song gets one segment. The first is the warm-up (the whole song), the last is the cool-down (2:00, then the stretch screen while the song plays out). In between choose Flat, Hill or Interval (suggested from each song's feel). Lengths are derived and read-only: a hill's length equals its song; an interval gets `rounds = round(song / (work + rest))` and a `finalRestAdjustSec` so it ends with the song. **Same as above** copies the segment above onto the next song, which is how you stack.
-6. The saved ride is named `Playlist Name ride - N min` (whole minutes, rounded down). Save is refused while the ride is under the target.
-
-Playlists you open in Amazon Music drift by a few seconds (gaps, crossfade, versions), so RideDeck never claims to be in sync. The catalog version may differ from Amazon's by a few seconds.
+Without the Supabase vars the app still works with the built-in presets, and the library shows "Database not configured". Run `supabase/migrations/0001_init.sql` once in the Supabase SQL editor and add `preview` to Project Settings, API, Exposed schemas. Tables (in both `public` and `preview`): `rides` (the ride JSON in `workout`, plus name, genre, vibe, playlist_url, total_seconds, updated_at), `ride_logs` (History), `songs` (the song-length cache), `app_settings`. The browser never talks to Supabase; the server uses the secret key and row-level security has no policies.
 
 ### Old rides
 
@@ -153,7 +81,11 @@ Your v1 rides (resistance 0 to 100) are not rewritten. They are converted when r
 
 ### Preview data
 
-Preview deployments set `AIRTABLE_RIDES_TABLE=RidesV2` and `AIRTABLE_LEGACY_RIDES_TABLE=Rides`. The preview reads both and writes only `RidesV2`, so your original `Rides` table is never changed. A converted copy carries `sourceId` and replaces its original in the library. The old (v1) builder can't overwrite a v2 ride, and saving a legacy ride makes a converted copy. `RideLog` (History) is shared with production and only gets additive fields. Production sets neither variable, so it reads only `Rides`.
+One Supabase project, two schemas. Production reads and writes `public`; Vercel Preview deploys set `SUPABASE_DB_SCHEMA=preview` and use their own copy of every table (rides, history, songs, settings), so a preview ride never lands in production history. A converted copy carries `sourceId` and replaces its original in the library. The old (v1) builder can't overwrite a v2 ride.
+
+### Moving data from Airtable
+
+`scripts/import-airtable.ts` (run locally with `npx tsx`, never on Vercel) reads Airtable read-only and upserts into Supabase (`--schema preview|public`, `--dry-run` prints counts only). `scripts/verify-import.ts` checks counts and that every ride still reads and validates. `scripts/backup.ts` dumps the four tables to timestamped JSON in `/backup/` (gitignored). The Supabase free tier has no automatic backups, so run it now and then.
 
 ### Testing
 

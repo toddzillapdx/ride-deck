@@ -120,7 +120,7 @@ export type SaveStatus = "saving" | "ok" | "off" | { error: string };
 export function SummaryScreen({ name, endedEarly, totalSec, rideSec, stretchSec, kcal, status, onRetry, onAgain }: {
   name: string; endedEarly: boolean; totalSec: number; rideSec: number; stretchSec: number; kcal?: number; status: SaveStatus; onRetry: () => void; onAgain: () => void;
 }) {
-  const msg = status === "saving" ? "Saving to history…" : status === "ok" ? "Saved to history" : status === "off" ? "Not saved: Airtable isn't connected" : `Not saved: ${status.error}`;
+  const msg = status === "saving" ? "Saving to history…" : status === "ok" ? "Saved to history" : status === "off" ? "Not saved: the database isn't connected" : `Not saved: ${status.error}`;
   return (
     <Frame>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 text-center">

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { AirtableNotConfigured, airtableConfigured, getSettings, putSettings } from "@/lib/airtable";
+import { NotConfigured, dbConfigured, getSettings, putSettings } from "@/lib/db";
 import { PRESETS } from "@/lib/presets";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!airtableConfigured()) return NextResponse.json({ configured: false, hiddenPresets: [] });
+  if (!dbConfigured()) return NextResponse.json({ configured: false, hiddenPresets: [] });
   try {
     return NextResponse.json({ configured: true, ...(await getSettings()) });
   } catch (e) {
@@ -23,7 +23,7 @@ export async function PUT(req: Request) {
   try {
     return NextResponse.json({ configured: true, ...(await putSettings({ hiddenPresets })) });
   } catch (e) {
-    if (e instanceof AirtableNotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
+    if (e instanceof NotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
 }

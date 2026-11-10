@@ -201,7 +201,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
         return;
       }
       const body = await res.json().catch(() => ({}));
-      setSave({ phase: "error", text: res.status === 503 ? "Airtable isn't connected, so the ride can't be saved. Set AIRTABLE_TOKEN and AIRTABLE_BASE_ID in Vercel." : `Not saved (${res.status}): ${body.error ?? "unknown error"}` });
+      setSave({ phase: "error", text: res.status === 503 ? "The database isn't connected, so the ride can't be saved. Set SUPABASE_URL and SUPABASE_SECRET_KEY in Vercel." : `Not saved (${res.status}): ${body.error ?? "unknown error"}` });
     } catch (e) { setSave({ phase: "error", text: `Not saved: ${(e as Error).message}` }); }
   }
 

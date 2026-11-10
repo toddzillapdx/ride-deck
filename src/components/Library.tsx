@@ -40,7 +40,7 @@ export default function Library() {
   const layout = useLayout();
   const layoutPhone = layout?.phone;
 
-  // Deleting: your own rides are removed from Airtable; the built-in starter rides are hidden (and can be restored).
+  // Deleting: your own rides are removed from the database; the built-in starter rides are hidden (and can be restored).
   const { hidden, hide, restoreAll } = useHiddenPresets();
   const [ask, setAsk] = useState<{ w: Workout; mine: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,7 +95,7 @@ export default function Library() {
         <div className="flex items-end justify-between gap-3 pb-4">
           <div className="flex flex-col gap-1">
             <span className="text-[28px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
-            <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">{status === "ok" ? "Airtable connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Airtable error"}</span>
+            <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</span>
           </div>
           <a href="/history" className="flex h-[48px] items-center rounded-full border-2 border-line px-5 text-[14px] text-ink">History</a>
         </div>
@@ -139,7 +139,7 @@ export default function Library() {
     );
   }
 
-  const statusText = { loading: "Loading saved rides…", ok: "Airtable connected", off: "Airtable not configured · presets only", error: `Airtable error${detail ? `: ${detail.slice(0, 80)}` : ""}` }[status];
+  const statusText = { loading: "Loading saved rides…", ok: "Database connected", off: "Database not configured · presets only", error: `Database error${detail ? `: ${detail.slice(0, 80)}` : ""}` }[status];
 
   return (
     <Stage bg="#002A33">
@@ -259,7 +259,7 @@ function JsonModal({ modal, onClose, onSaved, canSave }: { modal: NonNullable<Mo
             <button onClick={copy} className="h-[48px] rounded-full bg-ice px-7 text-[15px] font-medium text-ground">Copy</button>
           ) : (
             <button onClick={save} disabled={busy || !canSave || !text.trim()} className="h-[48px] rounded-full bg-ice px-7 text-[15px] font-medium text-ground disabled:opacity-40">
-              {canSave ? (busy ? "Saving…" : "Save to library") : "Airtable not connected"}
+              {canSave ? (busy ? "Saving…" : "Save to library") : "Database not connected"}
             </button>
           )}
         </div>
