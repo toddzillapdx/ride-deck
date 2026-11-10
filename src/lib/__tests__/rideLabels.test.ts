@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildPhases, segmentDuration, type Ride } from "../engine";
 import { PRESETS_V2 } from "../presetsV2";
-import { countdownInfo, nextWord, sections, segTitle, type RideViewData } from "../rideLabels";
+import { countdownInfo, nextWord, sections, segmentBar, segTitle, type RideViewData } from "../rideLabels";
 
 const hiit = PRESETS_V2.find((p) => p.id === "preset-hiit-20") as Ride; // warm 3, sprint 40/20 x6, recover 2, resistance 30/30 x6, cool 3
 const phases = buildPhases(hiit);
@@ -61,5 +61,40 @@ describe("progress line sections", () => {
   it("a ride with no warm-up or cool-down is one solid section", () => {
     const free = PRESETS_V2.find((p) => p.id === "preset-free-ride") as Ride;
     expect(sections(free, free.segments.map(segmentDuration))).toEqual({ warm: 0, ride: 1800, cool: 0 });
+  });
+});
+
+describe("segment bar (the same for every segment type)", () => {
+  const full = (ride: Ride, elapsed: number): RideViewData => {
+    const ph = buildPhases(ride);
+    const durs = ride.segments.map(segmentDuration);
+    const starts = durs.map((_, i) => durs.slice(0, i).reduce((a, b) => a + b, 0));
+    const idx = ph.findIndex((p) => elapsed < p.endSec);
+    return { ride, phases: ph, idx, segStarts: starts, segDurations: durs, elapsed, total: durs.reduce((a, b) => a + b, 0), phaseLeft: ph[idx].endSec - elapsed };
+  };
+  it("a flat segment is a line with a marker and no breaks", () => {
+    const b = segmentBar(full(hiit, 90)); // warm-up, 3:00 long
+    expect(b.breaks).toEqual([]);
+    expect(b.pct).toBeCloseTo(50, 5);
+  });
+  it("an interval has a break at the start of every round after the first", () => {
+    const b = segmentBar(full(hiit, 180 + 10)); // sprint 40/20 x 6: round 1
+    expect(b.breaks).toHaveLength(5);
+    expect(b.breaks[0]).toBeCloseTo(1 / 6, 5);
+    expect(b.pct).toBeCloseTo((10 / 360) * 100, 5);
+  });
+  it("a hill has a break at every step and at the recovery", () => {
+    const hills = PRESETS_V2.find((p) => p.id === "preset-hill-repeats-30") as Ride;
+    const ph = buildPhases(hills);
+    const firstStep = ph.find((p) => p.kind === "hillStep")!;
+    const steps = ph.filter((p) => p.segmentIndex === firstStep.segmentIndex);
+    const b = segmentBar(full(hills, firstStep.startSec + 1));
+    expect(b.breaks).toHaveLength(steps.length - 1); // one break per phase after the first (steps and the recovery)
+    expect(b.breaks.every((f, i, a) => f > 0 && f < 1 && (i === 0 || f > a[i - 1]))).toBe(true);
+    expect(steps[steps.length - 1].kind).toBe("hillCool");
+  });
+  it("stays inside 0..100 at the very start and end of a segment", () => {
+    expect(segmentBar(full(hiit, 0)).pct).toBe(0);
+    expect(segmentBar(full(hiit, 179.99)).pct).toBeLessThanOrEqual(100);
   });
 });

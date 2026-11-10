@@ -8,7 +8,7 @@ import { fmtClock } from "@/lib/format";
 import { useLayout } from "@/lib/useLayout";
 import RideView, { ChangeView, Countdown321, SAFE } from "./RideView";
 import { countdownInfo, type RideViewData } from "@/lib/rideLabels";
-import { FLIP_BG, FLIP_FG, REST_BG, REST_FG, WARN_SEC, WORK_BG, WORK_FG, GROUND, ICE } from "@/lib/rideTheme";
+import { FLIP_BG, FLIP_FG, REST_BG, REST_FG, WARN_SEC, GROUND, ICE } from "@/lib/rideTheme";
 import EffortGuide from "./EffortGuide";
 import TapBanner from "./TapBanner";
 import { CaloriesScreen, StretchScreen, SummaryScreen, type SaveStatus } from "./PostRide";
@@ -226,10 +226,10 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
   const warning = stage === "riding" && !pos.done && lastOfSegment && pos.phaseLeftSec <= WARN_SEC;
   const showTap = (stage === "riding" || stage === "stretch") && !lockOk && !warning && rawElapsed >= nextPrompt;
 
-  const inInterval = stage === "riding" && !warning && (pos.phase.kind === "work" || pos.phase.kind === "rest");
   const count = stage === "riding" && !warning ? countdownInfo(v) : null;
-  const bg = warning ? FLIP_BG : inInterval ? (pos.phase.kind === "work" ? WORK_BG : REST_BG) : REST_BG;
-  const fgc = warning ? FLIP_FG : inInterval ? (pos.phase.kind === "work" ? WORK_FG : REST_FG) : REST_FG;
+  // One look while riding. Only the full-screen warning changes the screen.
+  const bg = warning ? FLIP_BG : REST_BG;
+  const fgc = warning ? FLIP_FG : REST_FG;
 
   if (layout === null) return <div className="fixed inset-0" style={{ background: GROUND }} />;
   const { landscape } = layout;

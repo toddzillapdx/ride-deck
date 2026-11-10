@@ -44,6 +44,22 @@ export function countdownInfo(v: RideViewData): { left: number; text: string; ic
   return null;
 }
 
+/**
+ * The current segment's own progress, for the thin bar above the effort tile. The same for every segment type:
+ * `pct` is how far through the segment you are (0 to 100) and `breaks` are fractions (0 to 1) where it changes
+ * inside: each hill step and the hill's recovery, each interval round. A flat segment has none.
+ */
+export function segmentBar(v: RideViewData): { pct: number; breaks: number[] } {
+  const p = v.phases[v.idx];
+  const start = v.segStarts[p.segmentIndex] ?? 0;
+  const dur = v.segDurations[p.segmentIndex] || 1;
+  const pct = Math.min(100, Math.max(0, ((v.elapsed - start) / dur) * 100));
+  const mine = v.phases.filter((x) => x.segmentIndex === p.segmentIndex);
+  const seg = v.ride.segments[p.segmentIndex];
+  const starts = seg.type === "interval" ? mine.filter((x) => x.kind === "work" && (x.round ?? 1) > 1) : seg.type === "hill" ? mine.slice(1) : [];
+  return { pct, breaks: starts.map((x) => (x.startSec - start) / dur).filter((f) => f > 0 && f < 1) };
+}
+
 /** Whole-ride progress along the very top: warm-up, the ride as one solid piece, cool-down. A marker shows where you are. */
 export function sections(ride: Ride, durations: number[]): { warm: number; ride: number; cool: number } {
   let warm = 0, i = 0;

@@ -1,10 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
 import { direction, fmtClock, fmtTarget } from "@/lib/format";
-import { effortWord, type Phase } from "@/lib/engine";
+import { effortWord } from "@/lib/engine";
 import { NoteIcon } from "./Icons";
 import { PauseIcon } from "./RideControls";
 import { GROUND, ICE, INK, MIST, WORK_BG } from "@/lib/rideTheme";
-import { countdownInfo, nextWord, sections, segTitle, type RideViewData } from "@/lib/rideLabels";
+import { countdownInfo, nextWord, sections, segTitle, segmentBar, type RideViewData } from "@/lib/rideLabels";
 
 
 /**
@@ -37,26 +37,27 @@ function ProgressLine({ v, onIce }: { v: RideViewData; onIce: boolean }) {
   );
 }
 
-/** Rounds of an interval, as thin notches under the timer: done filled, current outlined. */
-function RoundBar({ v, onIce }: { v: RideViewData; onIce: boolean }) {
-  const p = v.phases[v.idx];
-  const c = onIce ? GROUND : ICE, dim = onIce ? "rgba(0,42,51,.28)" : "#07575B";
+/**
+ * This segment's own progress: the same thin line and vertical marker as the ride line at the top, with thin ruled
+ * breaks where it changes inside (hill steps and recovery, interval rounds). One look for every segment type.
+ */
+function SegmentBar({ v }: { v: RideViewData }) {
+  const { pct, breaks } = segmentBar(v);
   return (
-    <div className="flex w-full gap-[4px]" style={{ height: 6 }} aria-label={`Round ${p.round} of ${p.roundsTotal}`}>
-      {Array.from({ length: p.roundsTotal ?? 0 }, (_, k) => {
-        const r = k + 1;
-        return <div key={k} className="flex-1 rounded-full" style={{ background: r < (p.round ?? 0) ? c : r === p.round ? c : dim, opacity: r === p.round ? 0.6 : 1 }} />;
-      })}
+    <div className="relative flex-none" style={{ height: 18 }} role="progressbar" aria-label="Segment progress" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+      <div className="absolute inset-x-0 rounded-full" style={{ top: 8, height: 3, background: "#07575B" }} />
+      <div className="absolute rounded-full" style={{ top: 8, height: 3, left: 0, width: `${pct}%`, background: ICE, opacity: 0.55 }} />
+      {breaks.map((f, i) => <div key={i} className="absolute" style={{ top: 3, height: 13, width: 2, left: `calc(${f * 100}% - 1px)`, background: ICE, opacity: 0.7 }} />)}
+      <div className="absolute rounded-full" style={{ top: 0, height: 18, width: 4, left: `calc(${pct}% - 2px)`, background: ICE }} />
     </div>
   );
 }
 
-/** "Was 4 · up 1" only when something changed. No noise when it did not. */
+/** "Was 4" only when something changed. No noise when it did not, and no "up 3" arithmetic. */
 function changeLine(prev: Parameters<typeof fmtTarget>[0], cur: Parameters<typeof fmtTarget>[0]): string {
   if (prev === undefined || cur === undefined) return "";
   const mid = (t: typeof cur) => (Array.isArray(t) ? (t[0] + t[1]) / 2 : (t as number));
-  const d = Math.round(mid(cur!) - mid(prev!));
-  return d === 0 ? "" : `Was ${fmtTarget(prev)} · ${d > 0 ? "up" : "down"} ${Math.abs(d)}`;
+  return Math.round(mid(cur!) - mid(prev!)) === 0 ? "" : `Was ${fmtTarget(prev)}`;
 }
 
 const num = "num font-light";
@@ -71,19 +72,22 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
   const seg = ride.segments[p.segmentIndex];
   const playlist = ride.playlistUrl;
   const interval = p.kind === "work" || p.kind === "rest";
-  const onIce = p.kind === "work";
+  // The ride screen keeps one look for every segment: no tint for WORK. Only the full-screen countdowns change the screen.
+  const onIce = false;
   const cap = landscape ? "26dvh" : "17dvh";
   // Hill step cue: where effort goes next, and when.
   const hillNext = p.kind === "hillStep" && nextP && nextP.segmentIndex === p.segmentIndex ? nextP : undefined;
   const stepCue = p.kind === "hillStep" ? (hillNext ? (hillNext.kind === "hillCool" ? `Recover in ${fmtClock(Math.ceil(phaseLeft))}` : `Up to ${fmtTarget(hillNext.effort)} in ${fmtClock(Math.ceil(phaseLeft))}`) : "Top of the hill. Hold it.") : p.kind === "hillCool" ? "Ease off and spin it out." : undefined;
   // The step pulse: only for steps after the first (the segment-start change is announced by the flip screen).
+  // Effort and cadence are drawn at the same size: both fit the longer of the two numbers.
+  const sharedChars = Math.max(fmtTarget(p.effort).length, fmtTarget(p.cadence).length);
   const pulse = p.kind === "hillStep" && (p.step ?? 1) > 1;
   const muted = onIce ? { color: GROUND, opacity: 0.75 } : { color: MIST };
 
   const label = (
     <span className="flex max-w-full items-center justify-center gap-2 truncate text-[14px] font-medium uppercase tracking-[.12em]" style={{ color: onIce ? GROUND : ICE }}>
       <span className="truncate">{segTitle(seg)}</span>
-      {(interval || p.kind === "hillCool") && <span className="flex-none rounded-full px-3 py-[2px] text-[14px] font-medium tracking-[.1em]" style={onIce ? { background: GROUND, color: ICE } : { border: `2px solid ${ICE}`, color: ICE }}>{p.kind === "work" ? "WORK" : p.kind === "hillCool" ? "RECOVER" : "REST"}</span>}
+      {(interval || p.kind === "hillCool") && <span className="flex-none rounded-full px-3 py-[2px] text-[14px] font-medium tracking-[.1em]" style={p.kind === "work" ? { background: ICE, border: `2px solid ${ICE}`, color: GROUND } : { border: `2px solid ${ICE}`, color: ICE }}>{p.kind === "work" ? "WORK" : p.kind === "hillCool" ? "RECOVER" : "REST"}</span>}
     </span>
   );
   const clock = <span className={`${num} font-extralight`} style={{ fontSize: landscape ? "clamp(44px, 15dvh, 130px)" : "clamp(64px, 12dvh, 170px)" }}>{fmtClock(Math.ceil(phaseLeft))}</span>;
@@ -108,19 +112,18 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
           {clock}
         </div>
       )}
-      {interval && <RoundBar v={v} onIce={onIce} />}
+      <SegmentBar v={v} />
 
       {/* targets: always in the same place */}
       <div className={`flex min-h-0 flex-1 gap-2 pt-2 ${landscape ? "flex-row" : "flex-col"}`} style={{ gap: "clamp(8px, 1.4dvh, 20px)" }}>
         <Tile
-          grow={landscape ? 1 : 1.3} label="Effort" color={MIST} target={p.effort} cap={cap} dark={onIce}
+          grow={landscape ? 1 : 1.3} label="Effort" color={ICE} chars={sharedChars} target={p.effort} cap={cap} dark={onIce}
           action={<button aria-label="What do the effort numbers mean?" onClick={onGuide} className="flex h-[28px] w-[28px] items-center justify-center rounded-full border-2 border-line text-[14px] font-medium text-ice">?</button>}
           numClass={pulse ? "effort-pulse" : ""} numKey={idx}
-          word={effortWord(p.effort)} cue={stepCue}
-          bar={p.kind === "hillStep" || p.kind === "hillCool" ? <HillBar phases={phases.filter((x) => x.segmentIndex === p.segmentIndex)} elapsed={elapsed} /> : undefined}
+          cue={stepCue}
           foot={changeLine(prev?.effort, p.effort)}
         />
-        <Tile grow={1} label="Cadence" unit="RPM" color={ICE} target={p.cadence} cap={cap} dark={onIce} foot={changeLine(prev?.cadence, p.cadence)} />
+        <Tile grow={1} label="Cadence" unit="RPM" color={ICE} chars={sharedChars} target={p.cadence} cap={cap} dark={onIce} foot={changeLine(prev?.cadence, p.cadence)} />
       </div>
 
       {/* cue */}
@@ -129,11 +132,10 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
       {/* bottom: what is next, the current song, and the controls */}
       <div className={`flex gap-2 pt-2 ${landscape ? "flex-row items-center" : "flex-col"}`}>
         {landscape && <PauseButton onClick={onPause} onIce={onIce} />}
-        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-          <span className="truncate text-[17px] font-medium leading-tight">
-            <span className="mr-2 text-[14px] uppercase tracking-[.12em]" style={muted}>Next</span>{nextP ? nextWord(ride, p, nextP) : "FINISH"}
-          </span>
-          {now && <span className="truncate text-[14px] font-light leading-tight" style={muted}>♪ {now.title} · {now.artist}</span>}
+        {/* one line: what is next, then the song that should be playing. Same size and weight, different colors. */}
+        <div className="flex min-w-0 flex-1 items-baseline gap-3 text-[17px] font-normal leading-tight">
+          <span className="flex-none uppercase tracking-[.04em]" style={{ color: ICE }}>Next {nextP ? nextWord(ride, p, nextP) : "FINISH"}</span>
+          {now && <span className="min-w-0 truncate" style={{ color: MIST }}>♪ {now.title} · {now.artist}</span>}
         </div>
         <div className={`flex flex-none gap-2 ${landscape ? "" : "w-full"}`}>
           {!landscape && <PauseButton onClick={onPause} grow onIce={onIce} />}
@@ -163,27 +165,8 @@ function Stat({ label, value, right, onIce }: { label: string; value: string; ri
   );
 }
 
-/** The climb progress bar: one slice per effort level, the current one filling. */
-function HillBar({ phases, elapsed }: { phases: Phase[]; elapsed: number }) {
-  return (
-    <div className="flex h-[10px] gap-[3px]" aria-label="Hill progress">
-      {phases.map((s, i) => {
-        const style = { flex: `${s.endSec - s.startSec} 1 0` };
-        if (elapsed >= s.endSec) return <div key={i} className="rounded-[3px] bg-ice" style={style} />;
-        if (elapsed >= s.startSec)
-          return (
-            <div key={i} className="box-border overflow-hidden rounded-[3px] border border-ice bg-ground" style={style}>
-              <div className="h-full bg-ice" style={{ width: `${((elapsed - s.startSec) / (s.endSec - s.startSec)) * 100}%` }} />
-            </div>
-          );
-        return <div key={i} className="box-border rounded-[3px] border border-line bg-ground" style={style} />;
-      })}
-    </div>
-  );
-}
-
-function Tile({ label, unit, color, target, foot, cap, grow, action, numClass = "", numKey, word, cue, bar, dark }: {
-  label: string; unit?: string; color: string; target: Parameters<typeof fmtTarget>[0]; foot: string; cap: string; grow: number;
+function Tile({ label, unit, color, target, chars, foot, cap, grow, action, numClass = "", numKey, word, cue, bar, dark }: {
+  label: string; unit?: string; color: string; target: Parameters<typeof fmtTarget>[0]; chars?: number; foot: string; cap: string; grow: number;
   action?: ReactNode; numClass?: string; numKey?: number; word?: string; cue?: string; bar?: ReactNode;
   /** On the ice (WORK) screen the tiles are dark, so their text keeps its own colors. */
   dark?: boolean;
@@ -196,7 +179,7 @@ function Tile({ label, unit, color, target, foot, cap, grow, action, numClass = 
         <span className="flex items-center gap-2 whitespace-nowrap text-[14px] tracking-[.1em] text-mist">{unit}{action}</span>
       </div>
       <div className="fit-area flex min-h-[48px] flex-1 items-center justify-center overflow-hidden">
-        <span key={numKey} className={`fit-num ${numClass}`} style={{ color, ["--chars" as string]: Math.max(text.length, 3), ["--cap" as string]: cap } as CSSProperties}>{text}</span>
+        <span key={numKey} className={`fit-num ${numClass}`} style={{ color, ["--chars" as string]: Math.max(chars ?? text.length, 3), ["--cap" as string]: cap } as CSSProperties}>{text}</span>
       </div>
       {(word || cue) && (
         <span className="truncate text-center text-[16px] font-medium">
