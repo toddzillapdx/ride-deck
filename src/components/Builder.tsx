@@ -6,7 +6,7 @@ import PlanStep from "./PlanStep";
 import VersionPicker from "./VersionPicker";
 import { fmtClock } from "@/lib/format";
 import {
-  aligned, arrangeDraft, fitDraft, insertSong, newSong, removeSong, replaceSong, setPlanned, toRide,
+  addBack, aligned, arrangeDraft, fitDraft, lockAll, insertSong, newSong, removeSong, replaceSong, setPlanned, toRide,
   type RideDraft, type SongCandidate,
 } from "@/lib/builderV2";
 import { rideDuration } from "@/lib/engine";
@@ -49,10 +49,16 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
   const [pass, setPass] = useState("");
   const [save, setSave] = useState<Save>({ phase: "idle" });
   const [picking, setPicking] = useState<number | null>(null);
+  /** The list as it was before the last Fix length, so it can be put back. */
+  const [undo, setUndo] = useState<RideDraft | null>(null);
 
   useEffect(() => { setPass(passcode.get()); }, []);
   const commit = (next: RideDraft) => { ref.current = next; setDState(next); writeDraft(next.songs.length ? next : null); };
-  const patch = (p: Partial<RideDraft>) => commit({ ...ref.current, ...p });
+  const patch = (p: Partial<RideDraft>) => {
+    const next = { ...ref.current, ...p };
+    // A playlist link means the playlist exists: lock the songs so the list keeps matching it.
+    commit(typeof p.playlistUrl === "string" && /^https?:\/\//i.test(p.playlistUrl.trim()) && !ref.current.songs.every((s) => s.locked) ? lockAll(next) : next);
+  };
 
   const check = useMemo(() => checkSongs(d.songs, d.targetMin), [d.songs, d.targetMin]);
   const fitted = useMemo(() => (aligned(d) ? fitDraft(d) : null), [d]);
@@ -84,7 +90,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
   }
 
   async function planAll() {
-    setMsg(null); setBusy("plan");
+    setMsg(null); setBusy("plan"); setUndo(null);
     try {
       const cur = ref.current;
       const r = await planSongsApi({ ...styleBody(cur), count: songsNeeded(cur.targetMin) + SPARES, spares: SPARES, avoid: [...tried.current, ...heard].slice(0, 150), keep: [] });
@@ -144,11 +150,18 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
   /** Arrange from real lengths first (free). Only if that cannot do it, ask the planner for the missing kind of song. */
   async function fixLength() {
     setMsg(null); setBusy("adjust");
+    const before = ref.current;
+    setUndo(before);
+    const moved = () => {
+      const keep = new Set(ref.current.songs.map((s) => s.key));
+      const gone = before.songs.filter((s) => !keep.has(s.key)).map((s) => s.title);
+      return gone.length ? ` Moved out of the ride: ${gone.join(", ")} (see Held back, or Undo).` : "";
+    };
     try {
       for (let step = 0; step < 8; step++) {
         await resolveAll();
         const a = arrangeNow();
-        if (a.ok) { setMsg({ text: `Ride is ${fmtClock(a.check.rideSec as number)}, inside the ${ref.current.targetMin} min window.`, ok: true }); return; }
+        if (a.ok) { setMsg({ text: `Ride is ${fmtClock(a.check.rideSec as number)}, inside the ${ref.current.targetMin} min window.${moved()}`, ok: true }); return; }
         const n = ref.current.songs.length;
         if (a.problem === "no-warmup") { if (!(await addSong(0))) return; continue; }
         if (a.problem === "no-cooldown") { if (!(await addSong(n))) return; continue; }
@@ -159,7 +172,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
         else removeAt(next.index);
       }
       const a = arrangeNow();
-      setMsg(a.ok ? { text: `Ride is ${fmtClock(a.check.rideSec as number)}.`, ok: true } : { text: "Close, but not there yet. Press Fix length again, or swap a song." });
+      setMsg(a.ok ? { text: `Ride is ${fmtClock(a.check.rideSec as number)}.${moved()}`, ok: true } : { text: `Close, but not there yet. Press Fix length again, or swap a song.${moved()}` });
     } catch (e) { fail(e); } finally { setBusy(null); }
   }
 
@@ -178,6 +191,9 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
     void rememberApi({ artist: s.artist, title: s.title, durationSec: sec, ...(cand ? { candidate: cand } : {}) });
     setPicking(null);
   };
+  const copied = () => commit(lockAll(ref.current));
+  const putBack = (key: string) => { commit(addBack(ref.current, key)); setUndo(null); };
+  const undoFix = () => { if (undo) { commit(undo); setUndo(null); setMsg({ text: "Put the list back as it was.", ok: true }); } };
   const toggleLock = (i: number) => commit({ ...ref.current, songs: ref.current.songs.map((x, j) => (j === i ? { ...x, locked: !x.locked } : x)) });
 
   const title = check.rideSec !== undefined && d.name.trim() ? rideTitle(d.name, check.rideSec) : d.name.trim() ? `${d.name.trim()} ride` : d.sourceId ? "Converted ride" : "New ride";
@@ -236,7 +252,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
             <MusicStep
               d={d} patch={patch} onTarget={setTarget} check={check} busy={busy} swapping={swapping} bench={d.bench.length} canCopy={d.songs.length > 0 && d.songs.every((s) => s.durationSec !== undefined)}
               needPass={needPass} pass={pass} onPass={(v) => { setPass(v); passcode.set(v); }}
-              onPlan={planAll} onFix={fixLength} onAdd={() => addSong()} onSwap={(i) => swapAt(i)} onRemove={removeAt} onLock={toggleLock} onFix1={(i) => setPicking(i)} onMsg={(text, ok) => setMsg({ text, ok })}
+              onPlan={planAll} onFix={fixLength} onAdd={() => addSong()} onSwap={(i) => swapAt(i)} onRemove={removeAt} onLock={toggleLock} onFix1={(i) => setPicking(i)} onCopied={copied} onAddBack={putBack} onUndo={undo ? undoFix : undefined} onMsg={(text, ok) => setMsg({ text, ok })}
             />
           ) : (
             <PlanStep d={d} setD={commit} fitted={fitted} check={check} />

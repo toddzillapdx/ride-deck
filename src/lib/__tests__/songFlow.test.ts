@@ -152,3 +152,12 @@ describe("what blocks saving the soundtrack", () => {
     expect(p.join(" | ")).toMatch(/short of 20 min/);
   });
 });
+
+describe("locked songs stay even when the target cannot be met", () => {
+  it("keeps a locked song in the fallback too", () => {
+    const pool = [P("A", 180, 3), P("B", 240, 5, { locked: true }), P("C", 240, 6), P("D", 240, 7), P("E", 200, 2)];
+    const a = arrange(pool, 5); // far too short a target: everything wants to go
+    expect(a.songs.map((s) => s.title)).toContain("B");
+    expect(a.problem).toBe("window");
+  });
+});

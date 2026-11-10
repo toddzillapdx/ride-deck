@@ -167,3 +167,32 @@ describe("the saved ride plays on the song clock", () => {
     expect(phaseAt(phases, 1078 + 120)?.done).toBe(true);
   });
 });
+
+import { addBack, lockAll } from "../builderV2";
+import { arrangeDraft } from "../builderV2";
+describe("a built playlist is protected", () => {
+  const withBench = () => {
+    const d = ready();
+    // two extra songs the arrangement could hold back (a short target forces a trim)
+    return { ...d, targetMin: 12 };
+  };
+  it("held-back songs can be added back where they belong, never first or last", () => {
+    const d = withBench();
+    const { draft } = arrangeDraft(d);
+    expect(draft.bench.length).toBeGreaterThan(0);
+    const back = draft.bench[0];
+    const restored = addBack(draft, back.key);
+    expect(restored.bench.some((s) => s.key === back.key)).toBe(false);
+    expect(restored.songs.some((s) => s.key === back.key)).toBe(true);
+    expect(restored.songs[0].key).toBe(draft.songs[0].key);
+    expect(restored.songs[restored.songs.length - 1].key).toBe(draft.songs[draft.songs.length - 1].key);
+    expect(aligned(restored)).toBe(true);
+    expect(restored.songs.find((s) => s.key === back.key)?.pos).toBe(back.pos);
+  });
+  it("locked songs are never moved out by a re-arrange", () => {
+    const locked = lockAll(withBench());
+    const { draft } = arrangeDraft(locked);
+    expect(draft.bench).toEqual([]);
+    expect(draft.songs.length).toBe(locked.songs.length);
+  });
+});

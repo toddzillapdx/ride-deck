@@ -415,6 +415,22 @@ export function suggestAll(d: RideDraft): RideDraft {
   return normalizeEnds({ ...d, segments });
 }
 
+/** Put a held-back song back in the ride, where its place in the energy arc says it belongs (never first or last). */
+export function addBack(d: RideDraft, key: string): RideDraft {
+  const song = d.bench.find((s) => s.key === key);
+  if (!song) return d;
+  const pos = song.pos ?? 0;
+  const middle = d.songs.slice(1, -1);
+  const before = middle.filter((s) => (s.pos ?? 0) < pos).length;
+  const at = Math.max(1, Math.min(d.songs.length - 1, 1 + before));
+  const next = insertSong({ ...d, bench: d.bench.filter((s) => s.key !== key) }, at, { ...song, status: song.status === "pending" ? "pending" : song.status });
+  // insertSong gives it a fresh position between its neighbours; keep the one it had
+  return { ...next, songs: next.songs.map((s) => (s.key === key ? { ...s, pos: song.pos } : s)) };
+}
+
+/** Lock every song: the playlist has been built from this list, so nothing may quietly change it. */
+export const lockAll = (d: RideDraft): RideDraft => ({ ...d, songs: d.songs.map((s) => ({ ...s, locked: true })) });
+
 export const aligned = (d: RideDraft) => d.songs.length > 0 && d.songs.length === d.segments.length;
 
 /** The draft with every duration, round count and last-rest derived from the songs. */

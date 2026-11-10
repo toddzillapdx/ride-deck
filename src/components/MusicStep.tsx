@@ -15,6 +15,7 @@ export default function MusicStep(p: {
   d: RideDraft; patch: (x: Partial<RideDraft>) => void; onTarget: (m: number) => void; check: Check;
   busy: string | null; swapping: number | null; bench: number;
   onPlan: () => void; onFix: () => void; onAdd: () => void; onSwap: (i: number) => void; onRemove: (i: number) => void; onLock: (i: number) => void; onFix1: (i: number) => void;
+  onCopied: () => void; onAddBack: (key: string) => void; onUndo?: () => void;
   needPass: boolean; pass: string; onPass: (v: string) => void; onMsg: (text: string, ok?: boolean) => void; canCopy: boolean;
 }) {
   const { d, patch, check, busy } = p;
@@ -26,14 +27,14 @@ export default function MusicStep(p: {
   const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(toPlaylistPromptV2(d.name.trim() || "RideDeck ride", d.songs, style, d.vibe)); p.onMsg("Prompt copied. Paste it into a Claude in Chrome chat.", true); }
+    try { await navigator.clipboard.writeText(toPlaylistPromptV2(d.name.trim() || "RideDeck ride", d.songs, style, d.vibe)); p.onCopied(); p.onMsg("Prompt copied, and every song is now locked so the list matches the playlist you build. Unlock a song to change it.", true); }
     catch { p.onMsg("Couldn't copy automatically. Allow clipboard access and try again."); }
   };
 
   const n = d.songs.length;
   const cols = n <= 10 ? 1 : n <= 20 ? 2 : 3;
   const rows = Math.max(1, Math.ceil(n / cols));
-  const LIST_H = 330;
+  const LIST_H = d.bench.length ? 296 : 330;
   const rowH = Math.max(30, Math.min(44, Math.floor(LIST_H / rows) - 4));
 
   const stateText =
@@ -83,9 +84,21 @@ export default function MusicStep(p: {
           <span className="ml-3 text-[14px] text-mist">target {d.targetMin} min · {fmtClock(w.minSec)}–{fmtClock(w.maxSec)}{p.bench ? ` · ${p.bench} spare${p.bench === 1 ? "" : "s"} held back` : ""}</span>
         </span>
         <span className="flex-1" />
+        {p.onUndo && <button onClick={p.onUndo} className="h-9 rounded-full border-2 border-line px-4 text-[14px] text-ink">Undo</button>}
         {n > 0 && <button onClick={p.onFix} disabled={working} className="h-9 rounded-full border-2 border-ice px-4 text-[14px] font-medium text-ice disabled:opacity-40">{busy === "adjust" ? "Fixing…" : "Fix length"}</button>}
         {n > 0 && <button onClick={p.onAdd} disabled={working} className="h-9 rounded-full border-2 border-line px-4 text-[14px] text-ink disabled:opacity-40">{p.swapping === -1 ? "Adding…" : "+ Add song"}</button>}
       </div>
+
+      {d.bench.length > 0 && (
+        <div className="flex h-[30px] flex-none items-center gap-2 overflow-hidden" aria-label="Held back songs">
+          <span className="flex-none text-[14px] text-mist">Held back:</span>
+          {d.bench.slice(0, 6).map((s) => (
+            <button key={s.key} onClick={() => p.onAddBack(s.key)} title={`${s.title} · ${s.artist}${s.durationSec ? ` · ${fmtClock(s.durationSec)}` : ""}`}
+              className="h-[28px] max-w-[190px] flex-none truncate rounded-full border-2 border-line px-3 text-[14px] text-ink">+ {s.title}</button>
+          ))}
+          {d.bench.length > 6 && <span className="flex-none text-[14px] text-mist">+{d.bench.length - 6} more</span>}
+        </div>
+      )}
 
       {/* songs, in as many columns as it takes to fit with no scrolling */}
       <div className="min-h-0 flex-1">
@@ -136,7 +149,7 @@ function SongRow({ s, i, total, h, busy, swapping, onSwap, onRemove, onLock, onF
       <a href={amazonSearchUrl(s)} target="_blank" rel="noreferrer" className="flex-none text-[14px] text-mist underline underline-offset-4">Amazon</a>
       <button aria-label={s.locked ? "Unlock song" : "Lock song"} title="Lock: keep this song when fixing the length" onClick={onLock} className={`${btn} ${s.locked ? "border-ice bg-ice text-ground" : "border-line text-ink"}`} style={{ width: ic, height: ic }}>{s.locked ? "●" : "○"}</button>
       <button aria-label="Swap this song" title="Swap this song" onClick={onSwap} disabled={busy || s.locked} className={`${btn} border-line text-ink`} style={{ width: ic, height: ic }}>⇄</button>
-      <button aria-label="Remove this song" title="Remove this song" onClick={onRemove} disabled={busy || total <= 3} className={`${btn} border-line text-ink`} style={{ width: ic, height: ic }}>✕</button>
+      <button aria-label="Remove this song" title={s.locked ? "Unlock the song to remove it" : "Remove this song"} onClick={onRemove} disabled={busy || total <= 3 || s.locked} className={`${btn} border-line text-ink`} style={{ width: ic, height: ic }}>✕</button>
     </div>
   );
 }

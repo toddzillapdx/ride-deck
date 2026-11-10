@@ -165,9 +165,12 @@ export function arrange<T extends PoolSong>(pool: T[], targetMin: number): Arran
   const n = middle.length;
   const dropCost = (s: T) => (s.locked ? 1e6 : s.spare ? 1 : s.status === "doubtful" ? 4 : 10);
 
+  // Locked songs always stay, whatever the target says.
+  const lockedMask = middle.reduce((m, s, i) => (s.locked ? m | (1 << i) : m), 0);
   let best: { mask: number; cost: number; off: number } | null = null;
   let closest: { mask: number; gap: number; over: boolean } | null = null;
   for (let mask = 0; mask < 1 << n; mask++) {
+    if ((mask & lockedMask) !== lockedMask) continue;
     let sum = 0, cost = 0;
     for (let i = 0; i < n; i++) { if (mask & (1 << i)) sum += dur(middle[i]); else cost += dropCost(middle[i]); }
     if (sum >= lo && sum <= hi) {
