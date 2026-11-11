@@ -89,6 +89,10 @@ RideDeck stored its data in Airtable until 2026-11-11, when it moved to Supabase
 
 `scripts/backup.ts` dumps the four tables to a timestamped JSON file in `/backup/` (gitignored, since it holds your rides): `npx tsx scripts/backup.ts --schema public` with `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in `.env.local`. The Supabase free tier has no automatic backups and pauses a project after a week with no activity, so run a backup now and then and ride at least weekly.
 
+### Accounts (in progress)
+
+RideDeck is moving from one owner to private accounts for a small invited group: emailed 6-digit sign-in codes, rides private by default, an invite list, and a weekly limit on the song planner. The database side is in `supabase/` (see `supabase/README.md` for the rollout order and tests). The sign-in screens and route protection come next.
+
 ### Testing
 
 `npm test` (vitest) covers the engine (phases for every segment type including a negative `finalRestAdjustSec`, `phaseAt` at every boundary, hill level timing, effort words, v1 conversion, fit to songs, clock pause/resume), the builder model, presets and History. For a quick full ride, run `npm run dev` (or build with `NEXT_PUBLIC_SPEEDUP=1`) and open a ride with `?speed=10` or `?speed=30`. The speed-up is ignored in a normal production build.
