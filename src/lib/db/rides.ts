@@ -5,7 +5,7 @@ import { parseRideV2, readRide, rideDuration, rideToLegacyWorkout, type Ride } f
 import type { Workout } from "../types";
 import { NotFound, db, must } from "./client";
 
-/** One row of the rides table. `workout` is the ride JSON without its id (what WorkoutJson was in Airtable). */
+/** One row of the rides table. `workout` is the ride JSON without its id (the ride's saved JSON). */
 export interface RideRow {
   id: string;
   name: string;

@@ -5,7 +5,7 @@ import { parseLogPatch } from "@/lib/history";
 export const dynamic = "force-dynamic";
 type Ctx = { params: { id: string } };
 
-/** Old rows keep their Airtable record id (rec...); new rows have a UUID. */
+/** Rows carried over from before the move to Supabase keep their old record id (rec...); new rows have a UUID. */
 const RECORD_ID = /^(rec[A-Za-z0-9]{14}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 const fail = (e: unknown) =>

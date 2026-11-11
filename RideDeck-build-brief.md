@@ -1,3 +1,5 @@
+> **Historical document.** This is the original build brief. Storage has since moved from Airtable to Supabase; see the README for how the app works now.
+
 # RideDeck: build brief for Claude Code
 
 Build "RideDeck", a ride-coach web app (Next.js + TypeScript + Tailwind, deployed on Vercel). Todd rides a Peloton Bike in "Just Ride" mode and reads his real cadence and resistance on the bike's own display. A tablet hangs over the bike and runs RideDeck. **RideDeck does not read, measure, or interpret any bike data.** It runs the ride timer, shows target cadence and target resistance for each segment, warns before each change, and helps plan music. He self-regulates.

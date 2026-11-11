@@ -83,9 +83,11 @@ Your v1 rides (resistance 0 to 100) are not rewritten. They are converted when r
 
 One Supabase project, two schemas. Production reads and writes `public`; Vercel Preview deploys set `SUPABASE_DB_SCHEMA=preview` and use their own copy of every table (rides, history, songs, settings), so a preview ride never lands in production history. A converted copy carries `sourceId` and replaces its original in the library. The old (v1) builder can't overwrite a v2 ride.
 
-### Moving data from Airtable
+### Where the data came from, and backups
 
-`scripts/import-airtable.ts` (run locally with `npx tsx`, never on Vercel) reads Airtable read-only and upserts into Supabase (`--schema preview|public`, `--dry-run` prints counts only). `scripts/verify-import.ts` checks counts and that every ride still reads and validates. `scripts/backup.ts` dumps the four tables to timestamped JSON in `/backup/` (gitignored). The Supabase free tier has no automatic backups, so run it now and then.
+RideDeck stored its data in Airtable until 2026-11-11, when it moved to Supabase (rides, history, song cache and settings were copied over with their ids intact, so old history rows keep their `rec...` ids). The Airtable base is kept as a read-only archive and nothing reads it any more. The one-time import scripts are in git history (last present at commit `e3f03f8`: `scripts/import-airtable.ts`, `scripts/verify-import.ts`).
+
+`scripts/backup.ts` dumps the four tables to a timestamped JSON file in `/backup/` (gitignored, since it holds your rides): `npx tsx scripts/backup.ts --schema public` with `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in `.env.local`. The Supabase free tier has no automatic backups and pauses a project after a week with no activity, so run a backup now and then and ride at least weekly.
 
 ### Testing
 
