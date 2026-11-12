@@ -80,7 +80,7 @@ function SignIn() {
             <input className={input} type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
               placeholder="you@example.com" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <button type="submit" disabled={busy || !email.trim()} className={primary}>{busy ? "Sending…" : "Email me a code"}</button>
-            <p className="m-0 text-[14px] leading-snug text-mist">RideDeck is invite-only for now. We'll email you a code, so there's no password to remember.</p>
+            <p className="m-0 text-[14px] leading-snug text-mist">RideDeck is invite-only for now. We'll email you a code, so there's no password to remember. Not invited yet? <a href="/welcome" className="text-ice underline underline-offset-4">Request an invite</a>.</p>
           </form>
         ) : (
           <div className="flex flex-col gap-4">

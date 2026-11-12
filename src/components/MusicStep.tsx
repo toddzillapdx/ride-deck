@@ -16,7 +16,7 @@ export default function MusicStep(p: {
   busy: string | null; swapping: number | null; bench: number;
   onPlan: () => void; onFix: () => void; onAdd: () => void; onSwap: (i: number) => void; onRemove: (i: number) => void; onLock: (i: number) => void; onFix1: (i: number) => void;
   onCopied: () => void; onAddBack: (key: string) => void; onUndo?: () => void;
-  needPass: boolean; pass: string; onPass: (v: string) => void; onMsg: (text: string, ok?: boolean) => void; canCopy: boolean;
+  needPass: boolean; pass: string; onPass: (v: string) => void; quota?: { text: string; out: boolean } | null; onMsg: (text: string, ok?: boolean) => void; canCopy: boolean;
 }) {
   const { d, patch, check, busy } = p;
   const onlyArtist = d.artistOnly && !!d.seeds.trim();
@@ -70,6 +70,7 @@ export default function MusicStep(p: {
           <label className={`flex flex-none items-center gap-2 text-[14px] ${d.seeds.trim() ? "cursor-pointer" : "opacity-40"}`}>
             <input type="checkbox" checked={d.artistOnly} disabled={!d.seeds.trim()} onChange={(e) => patch({ artistOnly: e.target.checked })} className="h-5 w-5 accent-[#C4DFE6]" />All songs by this artist
           </label>
+          {p.quota && <span className={`flex-none text-[14px] ${p.quota.out ? "text-ice" : "text-mist"}`}>{p.quota.text}</span>}
           <button onClick={p.onPlan} disabled={working} className="h-10 w-[190px] flex-none rounded-full bg-ice text-[15px] font-medium text-ground disabled:opacity-50">
             {busy === "plan" ? "Choosing songs…" : busy === "resolve" ? "Checking lengths…" : n ? "Plan new songs" : "Plan songs"}
           </button>

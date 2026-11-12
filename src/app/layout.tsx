@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import AuthGuard from "@/components/AuthGuard";
 
 // Self-hosted Montserrat (latin), so builds and the tablet never depend on Google Fonts.
 const montserrat = localFont({
@@ -31,7 +32,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, maxi
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={montserrat.variable}>
-      <body>{children}</body>
+      <body><AuthGuard />{children}</body>
     </html>
   );
 }

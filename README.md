@@ -91,7 +91,7 @@ RideDeck stored its data in Airtable until 2026-11-11, when it moved to Supabase
 
 ### Accounts (in progress)
 
-RideDeck is moving from one owner to private accounts for a small invited group: emailed sign-in codes, rides private by default, an invite list, and a weekly limit on the song planner. The database side is in `supabase/` (see `supabase/README.md` for the rollout order and tests). Sign-in is built (`/login`: enter an email on the invite list, then the code from the email; an Account menu in the library header signs out). It needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (browser-safe, from the Supabase project) plus custom SMTP and the invite gate hook configured in Supabase (see `supabase/README.md`). Without those variables the app runs exactly as before. Requiring sign-in on every route comes next.
+RideDeck is moving from one owner to private accounts for a small invited group: emailed sign-in codes, rides private by default, an invite list, and a weekly limit on the song planner. The database side is in `supabase/` (see `supabase/README.md` for the rollout order and tests). Sign-in is built (`/login`: enter an email on the invite list, then the code from the email; an Account menu in the library header signs out). It needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (browser-safe, from the Supabase project) plus custom SMTP and the invite gate hook configured in Supabase (see `supabase/README.md`). Without those variables the app runs exactly as before. Sign-in is now required on every page and data route when accounts are on, signed-out visitors get a welcome page with a Request an invite form, and the song planner is limited per person per week.
 
 ### Testing
 

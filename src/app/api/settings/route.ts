@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { NotConfigured, dbConfigured, getSettings, putSettings } from "@/lib/db";
+import { authConfigured } from "@/lib/auth/config";
+import { dbConfigured, failResponse, getSettings, putSettings, requester } from "@/lib/db";
 import { PRESETS } from "@/lib/presets";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!dbConfigured()) return NextResponse.json({ configured: false, hiddenPresets: [] });
+  if (!dbConfigured() && !authConfigured()) return NextResponse.json({ configured: false, hiddenPresets: [] });
   try {
-    return NextResponse.json({ configured: true, ...(await getSettings()) });
-  } catch (e) {
-    return NextResponse.json({ configured: true, hiddenPresets: [], error: (e as Error).message }, { status: 502 });
-  }
+    const { client } = await requester();
+    return NextResponse.json({ configured: true, ...(await getSettings(client)) });
+  } catch (e) { return failResponse(e, { configured: true, hiddenPresets: [] }); }
 }
 
 export async function PUT(req: Request) {
@@ -20,10 +20,5 @@ export async function PUT(req: Request) {
   // Only real starter-ride ids are kept, so this can't be used to store arbitrary data.
   const known = new Set(PRESETS.map((p) => p.id));
   const hiddenPresets = [...new Set(body.hiddenPresets.filter((x): x is string => typeof x === "string" && known.has(x)))];
-  try {
-    return NextResponse.json({ configured: true, ...(await putSettings({ hiddenPresets })) });
-  } catch (e) {
-    if (e instanceof NotConfigured) return NextResponse.json({ error: e.message }, { status: 503 });
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
-  }
+  try { const { client, accounts } = await requester(); return NextResponse.json({ configured: true, ...(await putSettings({ hiddenPresets }, client, accounts)) }); } catch (e) { return failResponse(e); }
 }

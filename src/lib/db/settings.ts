@@ -19,7 +19,11 @@ export async function getSettings(c: Client = db()): Promise<AppSettings> {
   return parseSettings(row?.value);
 }
 
-export async function putSettings(s: AppSettings, c: Client = db()): Promise<AppSettings> {
-  must(await c.from("app_settings").upsert({ key: KEY, value: s, updated_at: new Date().toISOString() }, { onConflict: "key" }));
+/**
+ * With accounts on, settings are one row per person (the person is filled in by the database), so the row is found by
+ * (user_id, key). That needs migration 0003. With accounts off it is the single shared row, found by key.
+ */
+export async function putSettings(s: AppSettings, c: Client = db(), perUser = false): Promise<AppSettings> {
+  must(await c.from("app_settings").upsert({ key: KEY, value: s, updated_at: new Date().toISOString() }, { onConflict: perUser ? "user_id,key" : "key" }));
   return s;
 }

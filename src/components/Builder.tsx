@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Stage from "./Stage";
 import MusicStep from "./MusicStep";
 import PlanStep from "./PlanStep";
@@ -12,7 +12,7 @@ import {
 import { rideDuration } from "@/lib/engine";
 import { styleForSave } from "@/lib/music";
 import { SPARES, checkSongs, nextAdjustment, rideTitle, soundtrackProblems, songsNeeded } from "@/lib/songFlow";
-import { NeedPasscode, applyResolved, passcode, planSongsApi, rememberApi, resolveApi, type PlanBody } from "@/lib/songClient";
+import { NeedPasscode, applyResolved, passcode, planSongsApi, quotaLine, rememberApi, resolveApi, type PlanBody, type QuotaLine } from "@/lib/songClient";
 
 export type Tab = "music" | "plan";
 
@@ -53,6 +53,16 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
   const [undo, setUndo] = useState<RideDraft | null>(null);
 
   useEffect(() => { setPass(passcode.get()); }, []);
+  const [quota, setQuota] = useState<QuotaLine | null>(null);
+  /** How many song plans are left this week (nothing when accounts are off, or for the owner). */
+  const refreshQuota = useCallback(async () => {
+    try {
+      const res = await fetch("/api/quota", { cache: "no-store" });
+      const j = await res.json().catch(() => ({}));
+      setQuota(res.ok && j.enabled ? quotaLine(j.plan) : null);
+    } catch { /* the line just does not show */ }
+  }, []);
+  useEffect(() => { void refreshQuota(); }, [refreshQuota]);
   const commit = (next: RideDraft) => { ref.current = next; setDState(next); writeDraft(next.songs.length ? next : null); };
   const patch = (p: Partial<RideDraft>) => {
     const next = { ...ref.current, ...p };
@@ -102,7 +112,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
       const a = arrangeNow();
       const left = a.bench.length;
       setMsg({ text: [...r.notes, a.ok ? `Arranged to ${fmtClock(a.check.rideSec as number)}${left ? `, with ${left} spare${left === 1 ? "" : "s"} held back` : ""}.` : "Close. Use Fix length to finish the job."].join(" "), ok: a.ok });
-    } catch (e) { fail(e); } finally { setBusy(null); }
+    } catch (e) { fail(e); } finally { setBusy(null); void refreshQuota(); }
   }
 
   /** Replace the song at `index` with one the planner picks for that place. */
@@ -251,7 +261,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
           {w1 ? (
             <MusicStep
               d={d} patch={patch} onTarget={setTarget} check={check} busy={busy} swapping={swapping} bench={d.bench.length} canCopy={d.songs.length > 0 && d.songs.every((s) => s.durationSec !== undefined)}
-              needPass={needPass} pass={pass} onPass={(v) => { setPass(v); passcode.set(v); }}
+              needPass={needPass} pass={pass} onPass={(v) => { setPass(v); passcode.set(v); }} quota={quota}
               onPlan={planAll} onFix={fixLength} onAdd={() => addSong()} onSwap={(i) => swapAt(i)} onRemove={removeAt} onLock={toggleLock} onFix1={(i) => setPicking(i)} onCopied={copied} onAddBack={putBack} onUndo={undo ? undoFix : undefined} onMsg={(text, ok) => setMsg({ text, ok })}
             />
           ) : (

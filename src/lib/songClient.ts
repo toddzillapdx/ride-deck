@@ -17,10 +17,28 @@ export const passcode = {
 
 export class NeedPasscode extends Error {}
 
+/** "You get more on Tuesday." from the time the oldest use in the week frees up. */
+export function limitResets(iso?: string): string {
+  const t = iso ? new Date(iso) : null;
+  if (!t || Number.isNaN(t.getTime())) return "More come back over the next week.";
+  const day = t.toLocaleDateString(undefined, { weekday: "long" });
+  return `You get another ${t.getTime() - Date.now() < 36e5 * 24 ? "later today" : `on ${day}`}.`;
+}
+
+export interface QuotaLine { text: string; out: boolean }
+/** The little "3 plans left this week" line. Nothing for the owner (no limit) or when accounts are off. */
+export function quotaLine(status: { used: number; limit: number; remaining: number | null; resets_at: string | null; exempt: boolean } | undefined | null): QuotaLine | null {
+  if (!status || status.exempt || status.remaining === null) return null;
+  if (status.remaining <= 0) return { text: `No plans left this week. ${limitResets(status.resets_at ?? undefined)}`, out: true };
+  return { text: `${status.remaining} plan${status.remaining === 1 ? "" : "s"} left this week`, out: false };
+}
+
 export async function planSongsApi(body: PlanBody): Promise<{ songs: PlannedSongLite[]; notes: string[] }> {
   const res = await fetch("/api/music/songs", { method: "POST", headers: { "Content-Type": "application/json", "x-planner-passcode": passcode.get() }, body: JSON.stringify(body) });
   const j = await res.json().catch(() => ({}));
+  if (res.status === 401 && j.code === "signin") throw new Error("Your sign-in ended. Please sign in again.");
   if (res.status === 401) throw new NeedPasscode(passcode.get() ? "That passcode didn't work." : "Enter the planner passcode.");
+  if (res.status === 429 && j.code === "limit") throw new Error(`${j.error} ${limitResets(j.resets_at)}`);
   if (!res.ok) throw new Error(j.error ?? `Planning failed (${res.status})`);
   return { songs: j.songs ?? [], notes: j.notes ?? [] };
 }

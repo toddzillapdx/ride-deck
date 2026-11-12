@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { authConfigured } from "@/lib/auth/config";
+import { failResponse, requester } from "@/lib/db";
 import { rememberSong, resolveSongs } from "@/lib/songs/resolve";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +11,7 @@ const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s
 
 /** POST { songs: [{artist,title}] } looks songs up. POST { remember: {artist,title,durationSec,candidate?} } saves a pick or a typed length. */
 export async function POST(req: Request) {
+  if (authConfigured()) { try { await requester(); } catch (e) { return failResponse(e); } } // song lookups are for signed-in people
   const raw = await req.text();
   if (raw.length > 60_000) return bad("Request too large", 413);
   let b: Record<string, unknown>;

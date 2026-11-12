@@ -3,6 +3,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /** Supabase is not set up (missing URL or key). Routes answer 503. */
 export class NotConfigured extends Error {}
+/** Accounts are on and nobody is signed in (or the session ended). Routes answer 401. */
+export class Unauthorized extends Error {}
 /** The row does not exist. Routes answer 404. */
 export class NotFound extends Error {}
 

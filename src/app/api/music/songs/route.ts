@@ -1,7 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { authConfigured } from "@/lib/auth/config";
+import { failResponse, requester, type Requester } from "@/lib/db";
 import { PlannerError } from "@/lib/planner";
+import { PLAN_LIMIT, SWAP_LIMIT } from "@/lib/quota";
 import { planSongs, type SongPlanInput } from "@/lib/songPlanner";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +20,10 @@ const bad = (error: string, status = 400) => NextResponse.json({ error }, { stat
 
 /** Song-first planning. Body: styles, targetMin, count; optional `slot` (one song), `keep`, `avoid`. */
 export async function POST(req: Request) {
-  if (!authorized(req)) return bad("passcode", 401);
+  // Accounts on: you must be signed in (that replaces the shared passcode). Accounts off: the passcode, as before.
+  let me: Requester | null = null;
+  if (authConfigured()) { try { me = await requester(); } catch (e) { return failResponse(e); } }
+  else if (!authorized(req)) return bad("passcode", 401);
   if (!process.env.ANTHROPIC_API_KEY) return bad("ANTHROPIC_API_KEY is not set", 503);
   const text = await req.text();
   if (text.length > 100_000) return bad("Request too large", 413);
@@ -56,9 +62,23 @@ export async function POST(req: Request) {
     return bad(e instanceof SyntaxError ? "Body must be JSON" : (e as Error).message);
   }
 
+  // Take one use of the weekly allowance before spending money; give it back if the planner fails.
+  const kind = input.slot ? "swap" : "plan";
+  if (me?.accounts) {
+    const cap = kind === "plan" ? PLAN_LIMIT() : SWAP_LIMIT();
+    const { data, error } = await me.client.rpc("consume_quota", { p_kind: kind, p_limit: cap });
+    if (error || !data) return bad("Couldn't check your weekly limit. Try again.", 502);
+    if (!data.allowed) {
+      return NextResponse.json({
+        error: kind === "plan" ? `You've used your ${cap} song plans for this week.` : `You've used your ${cap} song swaps for this week.`,
+        code: "limit", kind, limit: cap, resets_at: data.resets_at,
+      }, { status: 429 });
+    }
+  }
   try {
     return NextResponse.json(await planSongs(new Anthropic(), input));
   } catch (e) {
+    if (me?.accounts) await me.client.rpc("refund_quota", { p_kind: kind });
     if (e instanceof PlannerError) return bad(e.message, e.status);
     if (e instanceof Anthropic.AuthenticationError) return bad("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY in Vercel.", 502);
     if (e instanceof Anthropic.RateLimitError) return bad("Rate limited by Anthropic. Wait a moment and try again.", 429);

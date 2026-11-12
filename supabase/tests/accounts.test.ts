@@ -207,6 +207,38 @@ describe("planner limits", () => {
   });
 });
 
+describe("requests for an invite", () => {
+  it("nobody signed in or out can read or write the requests", async () => {
+    await as("anon", async (q) => { await refused(q, "select * from public.invite_requests"); await refused(q, "insert into public.invite_requests (email) values ('x@example.com')"); });
+    await as(A, async (q) => { await refused(q, "select * from public.invite_requests"); await refused(q, "update public.invite_requests set status = 'invited'"); });
+  });
+  it("the server can save one, a repeat is refused by the database, and notes are capped at 300 characters", async () => {
+    await as("service", async (q) => {
+      await q("insert into public.invite_requests (email, note) values ('new@example.com', 'I ride a lot')");
+      await q("savepoint s"); await expect(q("insert into public.invite_requests (email) values ('new@example.com')")).rejects.toThrow(/duplicate key/); await q("rollback to savepoint s");
+      await expect(q("insert into public.invite_requests (email, note) values ('long@example.com', $1)", ["x".repeat(301)])).rejects.toThrow(/check constraint/);
+    });
+    await root.query("insert into public.invite_requests (email, note) values ('new@example.com', 'I ride a lot') on conflict do nothing");
+  });
+  it("approve_invite puts them on the invite list (lower-cased), marks the request done, and can be run again", async () => {
+    expect((await root.query("select public.approve_invite('  New@Example.com ') as r")).rows[0].r).toBe("new@example.com is on the invite list.");
+    await root.query("select public.approve_invite('new@example.com')");
+    expect((await root.query("select email, exempt from public.invites where email = 'new@example.com'")).rows).toEqual([{ email: "new@example.com", exempt: false }]);
+    expect((await root.query("select status from public.invite_requests where email = 'new@example.com'")).rows[0].status).toBe("invited");
+    const hook = await root.query("select public.hook_before_user_created($1::jsonb) as r", [JSON.stringify({ user: { email: "NEW@example.com" } })]);
+    expect(hook.rows[0].r).toEqual({}); // they can now sign up
+  });
+  it("can invite someone who never asked, with no weekly limit if you say so, and refuses a non-email", async () => {
+    await root.query("select public.approve_invite('direct@example.com', true)");
+    expect((await root.query("select exempt from public.invites where email = 'direct@example.com'")).rows[0].exempt).toBe(true);
+    await expect(root.query("select public.approve_invite('not an email')")).rejects.toThrow(/does not look like an email/);
+  });
+  it("signed-in users cannot approve themselves or anyone else", async () => {
+    await as(A, async (q) => { await refused(q, "select public.approve_invite('me@example.com')"); });
+    await as("anon", async (q) => { await refused(q, "select public.approve_invite('me@example.com')"); });
+  });
+});
+
 describe("handing the existing data to you, then requiring owners (0003)", () => {
   it("0003 refuses to run while any row has no owner", async () => {
     await expect(root.query(file("migrations/0003_require_owner.sql"))).rejects.toThrow(/backfill-owner/);
