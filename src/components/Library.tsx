@@ -1,4 +1,5 @@
 "use client";
+import AccountMenu from "./AccountMenu";
 import { useCallback, useEffect, useState } from "react";
 import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
@@ -97,7 +98,7 @@ export default function Library() {
             <span className="text-[28px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
             <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</span>
           </div>
-          <a href="/history" className="flex h-[48px] items-center rounded-full border-2 border-line px-5 text-[14px] text-ink">History</a>
+          <div className="flex items-center gap-2"><AccountMenu className="h-[48px]" /><a href="/history" className="flex h-[48px] items-center rounded-full border-2 border-line px-5 text-[14px] text-ink">History</a></div>
         </div>
         <div className={`grid gap-3 ${layout.landscape ? "grid-cols-2" : "grid-cols-1"}`}>
           {all.map(({ w, mine }) => {
@@ -153,6 +154,7 @@ export default function Library() {
             <button onClick={() => setModal({ kind: "import" })} className="h-[44px] rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">
               Import JSON
             </button>
+            <AccountMenu className="h-[44px]" />
             <a href="/history" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">History</a>
             <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>
           </div>
