@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
+import { LogoMark, Wordmark } from "./Logo";
 import ConfirmDialog from "./ConfirmDialog";
 import { useLayout } from "@/lib/useLayout";
 import TargetsChart from "./TargetsChart";
@@ -85,11 +86,12 @@ export default function HistoryView() {
   if (layout.phone) {
     return (
       <PhoneShell>
+        <div className="flex items-center justify-between gap-2 pb-3">
+          <a href="/" aria-label="RideDeck home" className="flex min-w-0 items-center gap-2"><LogoMark size={30} /><Wordmark size={18} /></a>
+          <a href="/" className="flex h-[40px] flex-none items-center rounded-full border-2 border-line px-3 text-[14px] text-ink">← Library</a>
+        </div>
         <div className="flex items-end justify-between gap-3 pb-3">
-          <div className="flex flex-col gap-1">
-            <a href="/" className="flex h-[32px] items-center text-[12px] font-medium uppercase tracking-[.2em] text-mist">← Library</a>
-            <span className="text-[26px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>History</span>
-          </div>
+          <span className="text-[26px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>History</span>
           {status === "ok" && (
             <div className="flex gap-4">
               <Total label="Rides" value={String(t.rides)} />

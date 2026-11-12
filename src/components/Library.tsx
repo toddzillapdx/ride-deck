@@ -94,30 +94,27 @@ export default function Library() {
     const all = [...saved.map((w) => ({ w, mine: true })), ...visiblePresets.map((w) => ({ w, mine: false }))];
     return (
       <PhoneShell>
-        <div className="flex items-end justify-between gap-3 pb-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3"><LogoMark size={36} /><Wordmark size={24} /></div>
-            <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</span>
-          </div>
-          <div className="flex items-center gap-2"><AccountMenu className="h-[48px]" /><a href="/history" className="flex h-[48px] items-center rounded-full border-2 border-line px-5 text-[14px] text-ink">History</a></div>
+        <div className="flex items-center justify-between gap-2 pb-3">
+          <a href="/" aria-label="RideDeck home" className="flex min-w-0 items-center gap-2"><LogoMark size={30} /><Wordmark size={18} /></a>
+          <div className="flex flex-none items-center gap-1.5"><AccountMenu className="h-[40px] !px-3" /><a href="/history" className="flex h-[40px] items-center rounded-full border-2 border-line px-3 text-[14px] text-ink">History</a></div>
         </div>
-        <div className={`grid gap-3 ${layout.landscape ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid gap-2 ${layout.landscape ? "grid-cols-2" : "grid-cols-1"}`}>
           {all.map(({ w, mine }) => {
             const climbs = w.segments.filter((x) => x.type === "climb").length;
             const sprints = w.segments.filter((x) => x.type === "sprint").length;
             return (
-              <div key={w.id} className="flex items-center gap-3 rounded-[18px] border-2 border-line bg-tile px-4 py-3">
+              <div key={w.id} className="flex items-center gap-3 rounded-[16px] border-2 border-line bg-tile px-3.5 py-2">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="truncate text-[17px] font-normal">{w.name}</span>
-                  <span className="text-[12px] font-light leading-snug text-mist">
+                  <span className="truncate text-[16px] font-normal">{w.name}</span>
+                  <span className="text-[13px] font-light leading-snug text-mist">
                     {mine ? "Mine · " : ""}{fmtClock(totalSeconds(w))} · {w.segments.length} segment{w.segments.length === 1 ? "" : "s"}{climbs ? ` · ${climbs} climb${climbs > 1 ? "s" : ""}` : ""}{sprints ? ` · ${sprints} sprint${sprints > 1 ? "s" : ""}` : ""}
                   </span>
-                  <div className="flex items-center gap-5">
-                    {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[44px] items-center text-[13px] text-ice underline underline-offset-4">Playlist ↗</a>}
-                    <button onClick={() => setAsk({ w, mine })} className="flex h-[44px] items-center px-1 text-[13px] text-mist underline underline-offset-4">{mine ? "Delete" : "Remove"}</button>
+                  <div className="flex items-center gap-4">
+                    {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[32px] items-center text-[14px] text-ice underline underline-offset-4">Playlist ↗</a>}
+                    <button onClick={() => setAsk({ w, mine })} className="flex h-[32px] items-center text-[14px] text-mist underline underline-offset-4">{mine ? "Delete" : "Remove"}</button>
                   </div>
                 </div>
-                <a href={`/ride/${w.id}`} className="flex h-[52px] flex-none items-center rounded-full bg-ice px-7 text-[16px] font-medium text-ground">Start</a>
+                <a href={`/ride/${w.id}`} className="flex h-[46px] flex-none items-center rounded-full bg-ice px-6 text-[16px] font-medium text-ground">Start</a>
               </div>
             );
           })}
@@ -135,7 +132,7 @@ export default function Library() {
             <button className="flex-none text-ice underline underline-offset-4" onClick={() => { try { localStorage.setItem("ridedeck-hint-dismissed", "1"); } catch { /* ignore */ } setHint(false); }}>Got it</button>
           </div>
         )}
-        <p className="pt-4 text-center text-[11px] font-light text-mist">Build rides and plan music on a computer.</p>
+        <p className="pt-3 text-center text-[12px] font-light text-mist">Build rides and plan music on a computer.<br />{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</p>
         {dialog}
       </PhoneShell>
     );

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 export default function PhoneShell({ children }: { children: ReactNode }) {
   return (
     <div
-      className="fixed inset-0 overflow-y-auto bg-ground text-ink"
+      className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-ground text-ink"
       style={{
         paddingTop: "max(14px, env(safe-area-inset-top))",
         paddingRight: "max(16px, env(safe-area-inset-right))",
