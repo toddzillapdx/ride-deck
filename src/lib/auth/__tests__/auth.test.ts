@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanCode, isCompleteCode, isPlausibleEmail, normalizeEmail, safeNext } from "../email";
+import { OTP_LENGTH, cleanCode, isCompleteCode, isPlausibleEmail, normalizeEmail, safeNext } from "../email";
 
 describe("sign-in form helpers", () => {
   it("normalizes email: trims and lowercases, and ignores non-strings", () => {
@@ -13,13 +13,13 @@ describe("sign-in form helpers", () => {
   });
   it("takes a code however it was typed or pasted", () => {
     expect(cleanCode("123456")).toBe("123456");
-    expect(cleanCode(" 123 456 ")).toBe("123456");
-    expect(cleanCode("123-456")).toBe("123456");
-    expect(cleanCode("1234567890")).toBe("123456");
+    expect(cleanCode(" 1234 5678 ")).toBe("12345678");
+    expect(cleanCode("1234-5678")).toBe("12345678");
+    expect(cleanCode("123456789012")).toBe("1234567890"); // never cut down to a shorter, wrong code
     expect(cleanCode("abc")).toBe("");
-    expect(isCompleteCode("123456")).toBe(true);
-    expect(isCompleteCode("12345")).toBe(false);
-    expect(isCompleteCode("12345a")).toBe(false);
+    for (const ok of ["123456", "12345678", "1234567890"]) expect(isCompleteCode(ok)).toBe(true);
+    for (const bad of ["12345", "12345a", "", "12345678901"]) expect(isCompleteCode(bad)).toBe(false);
+    expect(OTP_LENGTH).toBe(8); // the length Supabase sends unless changed
   });
   it("only ever redirects inside the app after sign-in", () => {
     expect(safeNext("/builder/new")).toBe("/builder/new");

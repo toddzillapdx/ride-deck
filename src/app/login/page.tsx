@@ -3,7 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { authConfigured } from "@/lib/auth/config";
 import { browserClient } from "@/lib/auth/browser";
-import { cleanCode, isCompleteCode, isPlausibleEmail, normalizeEmail, safeNext } from "@/lib/auth/email";
+import { OTP_LENGTH, cleanCode, isCompleteCode, isPlausibleEmail, normalizeEmail, safeNext } from "@/lib/auth/email";
 
 const input = "h-14 w-full rounded-[14px] border-2 border-line bg-tile px-4 text-[18px] text-ink outline-none focus:border-ice";
 const primary = "h-14 w-full rounded-full bg-ice text-[17px] font-medium text-ground disabled:opacity-40";
@@ -38,7 +38,7 @@ function SignIn() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: body.error ?? "Couldn't send a code. Try again.", bad: true }); return; }
       setEmail(e); setStep("code"); setCode(""); setWait(60);
-      setMsg({ text: `If ${e} is on the invite list, a 6-digit code is on its way. It can take a minute.` });
+      setMsg({ text: `If ${e} is on the invite list, a code is on its way. It can take a minute.` });
     } catch { setMsg({ text: "No connection. Try again.", bad: true }); }
     finally { setBusy(false); }
   }
@@ -80,13 +80,13 @@ function SignIn() {
             <input className={input} type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
               placeholder="you@example.com" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <button type="submit" disabled={busy || !email.trim()} className={primary}>{busy ? "Sending…" : "Email me a code"}</button>
-            <p className="m-0 text-[14px] leading-snug text-mist">RideDeck is invite-only for now. We'll email you a 6-digit code, so there's no password to remember.</p>
+            <p className="m-0 text-[14px] leading-snug text-mist">RideDeck is invite-only for now. We'll email you a code, so there's no password to remember.</p>
           </form>
         ) : (
           <div className="flex flex-col gap-4">
-            <input ref={codeRef} className={`${input} text-center text-[28px] tracking-[.4em]`} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={14}
-              placeholder="······" aria-label="6-digit code" value={code}
-              onChange={(e) => { const c = cleanCode(e.target.value); setCode(c); if (isCompleteCode(c)) void verify(c); }} />
+            <input ref={codeRef} className={`${input} text-center text-[26px] tracking-[.3em]`} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={14}
+              placeholder={"·".repeat(OTP_LENGTH)} aria-label="Code from your email" value={code}
+              onChange={(e) => { const c = cleanCode(e.target.value); setCode(c); if (c.length === OTP_LENGTH) void verify(c); }} />
             <button onClick={() => void verify(code)} disabled={busy || !isCompleteCode(code)} className={primary}>{busy ? "Checking…" : "Sign in"}</button>
             <div className="flex items-center justify-between gap-3">
               <button onClick={() => { setStep("email"); setMsg(null); }} className={quiet}>Use a different email</button>
