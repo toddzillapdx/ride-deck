@@ -34,7 +34,7 @@ export default function Welcome() {
 
   return (
     <main className="flex h-[100dvh] justify-center overflow-y-auto bg-ground px-5 text-ink" style={{ paddingTop: "max(40px, env(safe-area-inset-top))", paddingBottom: "max(40px, env(safe-area-inset-bottom))" }}>
-      <div className="flex w-full max-w-[460px] flex-col gap-8 self-center">
+      <div className="flex w-full max-w-[460px] flex-col gap-8 my-auto">
         <div className="flex flex-col items-center gap-5 text-center">
           <LogoHero className="max-w-[420px]" />
           <Wordmark size={40} />

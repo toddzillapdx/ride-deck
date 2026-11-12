@@ -59,8 +59,8 @@ function SignIn() {
   }
 
   return (
-    <main className="flex h-[100dvh] items-center justify-center overflow-y-auto bg-ground px-5 py-10 text-ink" style={{ paddingTop: "max(40px, env(safe-area-inset-top))", paddingBottom: "max(40px, env(safe-area-inset-bottom))" }}>
-      <div className="flex w-full max-w-[400px] flex-col gap-6">
+    <main className="flex h-[100dvh] justify-center overflow-y-auto bg-ground px-5 py-10 text-ink" style={{ paddingTop: "max(40px, env(safe-area-inset-top))", paddingBottom: "max(40px, env(safe-area-inset-bottom))" }}>
+      <div className="my-auto flex w-full max-w-[400px] flex-col gap-6">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-4"><LogoMark size={56} /><Wordmark size={32} /></div>
           <span className="text-[15px] font-light text-mist">{step === "code" ? "Enter your code" : "Sign in with your email"}</span>

@@ -27,10 +27,12 @@ export function LogoMark({ size = 40, className = "" }: { size?: number; classNa
 /** The hero: 19 bars that are a ride, with a soft reflection. Scales to the width it is given. */
 export function LogoHero({ className = "" }: { className?: string }) {
   return (
-    <div className={`relative w-full ${className}`} aria-hidden>
-      <LogoBars profile={RIDE_PROFILE} className="block w-full" />
-      <div className="pointer-events-none absolute inset-x-0 top-full" style={{ transform: "scaleY(-1)", opacity: 0.26, WebkitMaskImage: "linear-gradient(to top, rgba(0,0,0,.9), transparent 55%)", maskImage: "linear-gradient(to top, rgba(0,0,0,.9), transparent 55%)", marginTop: "-1px" }}>
-        <LogoBars profile={RIDE_PROFILE} className="block w-full" glow={false} />
+    <div className={`w-full ${className}`} style={{ paddingBottom: "13%" }} aria-hidden>
+      <div className="relative">
+        <LogoBars profile={RIDE_PROFILE} className="block w-full" />
+        <div className="pointer-events-none absolute inset-x-0 top-full" style={{ transform: "scaleY(-1)", opacity: 0.26, WebkitMaskImage: "linear-gradient(to top, rgba(0,0,0,.9), transparent 55%)", maskImage: "linear-gradient(to top, rgba(0,0,0,.9), transparent 55%)", marginTop: "-1px" }}>
+          <LogoBars profile={RIDE_PROFILE} className="block w-full" glow={false} />
+        </div>
       </div>
     </div>
   );
