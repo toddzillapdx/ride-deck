@@ -1,5 +1,6 @@
 "use client";
 import AccountMenu from "./AccountMenu";
+import { LogoMark, Wordmark } from "./Logo";
 import { useCallback, useEffect, useState } from "react";
 import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
@@ -95,7 +96,7 @@ export default function Library() {
       <PhoneShell>
         <div className="flex items-end justify-between gap-3 pb-4">
           <div className="flex flex-col gap-1">
-            <span className="text-[28px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
+            <div className="flex items-center gap-3"><LogoMark size={36} /><Wordmark size={24} /></div>
             <span className="text-[10px] font-medium uppercase tracking-[.16em] text-mist">{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</span>
           </div>
           <div className="flex items-center gap-2"><AccountMenu className="h-[48px]" /><a href="/history" className="flex h-[48px] items-center rounded-full border-2 border-line px-5 text-[14px] text-ink">History</a></div>
@@ -147,7 +148,7 @@ export default function Library() {
       <div className="flex h-full flex-col gap-6 bg-ground text-ink" style={{ padding: "36px 56px 40px", boxSizing: "border-box" }}>
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-2">
-            <span className="text-[34px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
+            <div className="flex items-center gap-4"><LogoMark size={48} /><Wordmark size={30} /></div>
             <span className={`text-[13px] font-medium uppercase tracking-[.18em] ${status === "error" ? "text-ice" : "text-mist"}`}>{statusText}</span>
           </div>
           <div className="flex gap-3">

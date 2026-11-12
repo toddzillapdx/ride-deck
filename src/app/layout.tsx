@@ -10,6 +10,7 @@ const montserrat = localFont({
     { path: "../fonts/montserrat-latin-300-normal.woff2", weight: "300", style: "normal" },
     { path: "../fonts/montserrat-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../fonts/montserrat-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/montserrat-latin-600-normal.woff2", weight: "600", style: "normal" },
   ],
   variable: "--font-montserrat",
   display: "swap",
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   // "Add to Home Screen" then opens full screen, without the browser bar.
   appleWebApp: { capable: true, title: "RideDeck", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  icons: { icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }, { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/icons/apple-touch-icon.png" },
 };
 // device-width, not a fixed 1280: Stage scales the 1280x800 canvas to whatever the window is.
 // (A fixed width made portrait phones lay out ~2,800px tall and pushed the canvas off screen.)

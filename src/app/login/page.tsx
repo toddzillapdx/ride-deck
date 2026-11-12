@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { authConfigured } from "@/lib/auth/config";
 import { browserClient } from "@/lib/auth/browser";
+import { LogoMark, Wordmark } from "@/components/Logo";
 import { OTP_LENGTH, cleanCode, isCompleteCode, isPlausibleEmail, normalizeEmail, safeNext } from "@/lib/auth/email";
 
 const input = "h-14 w-full rounded-[14px] border-2 border-line bg-tile px-4 text-[18px] text-ink outline-none focus:border-ice";
@@ -60,8 +61,8 @@ function SignIn() {
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-ground px-5 py-10 text-ink" style={{ paddingTop: "max(40px, env(safe-area-inset-top))", paddingBottom: "max(40px, env(safe-area-inset-bottom))" }}>
       <div className="flex w-full max-w-[400px] flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-[34px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-4"><LogoMark size={56} /><Wordmark size={32} /></div>
           <span className="text-[15px] font-light text-mist">{step === "code" ? "Enter your code" : "Sign in with your email"}</span>
         </div>
 

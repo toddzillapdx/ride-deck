@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/auth/email";
+import { LogoHero, Wordmark } from "@/components/Logo";
 
 const input = "h-14 w-full rounded-[14px] border-2 border-line bg-tile px-4 text-[18px] text-ink outline-none focus:border-ice";
 
@@ -34,8 +35,9 @@ export default function Welcome() {
   return (
     <main className="flex min-h-[100dvh] justify-center bg-ground px-5 text-ink" style={{ paddingTop: "max(40px, env(safe-area-inset-top))", paddingBottom: "max(40px, env(safe-area-inset-bottom))" }}>
       <div className="flex w-full max-w-[460px] flex-col gap-8 self-center">
-        <div className="flex flex-col gap-3">
-          <span className="text-[40px] font-light uppercase leading-none" style={{ letterSpacing: ".02em" }}>RideDeck</span>
+        <div className="flex flex-col items-center gap-5 text-center">
+          <LogoHero className="max-w-[420px]" />
+          <Wordmark size={40} />
           <span className="text-[19px] font-light leading-snug text-mist">A ride coach for your indoor bike. Music first, then a ride built to match it.</span>
           <span className="w-fit rounded-full border-2 border-line px-3 py-[2px] text-[14px] text-ice">Private beta</span>
         </div>
