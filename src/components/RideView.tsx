@@ -87,7 +87,7 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
   const label = (
     <span className="flex max-w-full items-center justify-center gap-2 truncate text-[14px] font-medium uppercase tracking-[.12em]" style={{ color: onIce ? GROUND : ICE }}>
       <span className="truncate">{segTitle(seg)}</span>
-      {(interval || p.kind === "hillCool") && <span className="flex-none rounded-full px-3 py-[2px] text-[14px] font-medium tracking-[.1em]" style={p.kind === "work" ? { background: ICE, border: `2px solid ${ICE}`, color: GROUND } : { border: `2px solid ${ICE}`, color: ICE }}>{p.kind === "work" ? "WORK" : p.kind === "hillCool" ? "RECOVER" : "REST"}</span>}
+      {(interval || p.kind === "hillCool") && <><span className="flex-none" aria-hidden style={{ opacity: .6 }}>·</span><span className="flex-none" style={p.kind === "work" ? { fontWeight: 700, color: onIce ? GROUND : INK } : { fontWeight: 500, opacity: .75 }}>{p.kind === "work" ? "WORK" : p.kind === "hillCool" ? "RECOVER" : "REST"}</span></>}
     </span>
   );
   const clock = <span className={`${num} font-extralight`} style={{ fontSize: landscape ? "clamp(44px, 15dvh, 130px)" : "clamp(64px, 12dvh, 170px)" }}>{fmtClock(Math.ceil(phaseLeft))}</span>;
