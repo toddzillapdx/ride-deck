@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { authConfigured } from "@/lib/auth/config";
-import { failResponse, requester, type Requester } from "@/lib/db";
+import { failResponse, requireAdmin, type Requester } from "@/lib/db";
 import { PlannerError } from "@/lib/planner";
 import { PLAN_LIMIT, SWAP_LIMIT } from "@/lib/quota";
 import { planSongs, type SongPlanInput } from "@/lib/songPlanner";
@@ -22,7 +22,7 @@ const bad = (error: string, status = 400) => NextResponse.json({ error }, { stat
 export async function POST(req: Request) {
   // Accounts on: you must be signed in (that replaces the shared passcode). Accounts off: the passcode, as before.
   let me: Requester | null = null;
-  if (authConfigured()) { try { me = await requester(); } catch (e) { return failResponse(e); } }
+  if (authConfigured()) { try { me = await requireAdmin(); } catch (e) { return failResponse(e); } }
   else if (!authorized(req)) return bad("passcode", 401);
   if (!process.env.ANTHROPIC_API_KEY) return bad("ANTHROPIC_API_KEY is not set", 503);
   const text = await req.text();

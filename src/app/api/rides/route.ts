@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authConfigured } from "@/lib/auth/config";
-import { createRide, createRideV2, dbConfigured, failResponse, listRides, requester } from "@/lib/db";
+import { createRide, createRideV2, dbConfigured, failResponse, listRides, requireAdmin, requester } from "@/lib/db";
 import { parseRideV2 } from "@/lib/engine";
 import { parseWorkout } from "@/lib/validate";
 
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   let ride, workout;
   try { if (v2) ride = parseRideV2(body); else workout = parseWorkout(body); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
   try {
-    const { client } = await requester();
+    const { client } = await requireAdmin(); // building rides is for the admin
     return NextResponse.json(ride ? await createRideV2(ride, client) : await createRide(workout!, client), { status: 201 });
   } catch (e) { return failResponse(e); }
 }

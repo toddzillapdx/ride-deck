@@ -1,6 +1,7 @@
 "use client";
 import AccountMenu from "./AccountMenu";
 import { LogoMark, Wordmark } from "./Logo";
+import { useAdmin } from "@/lib/useAdmin";
 import { useCallback, useEffect, useState } from "react";
 import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
@@ -40,6 +41,7 @@ export default function Library() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const layout = useLayout();
+  const admin = useAdmin();
   const layoutPhone = layout?.phone;
 
   // Deleting: your own rides are removed from the database; the built-in starter rides are hidden (and can be restored).
@@ -120,7 +122,7 @@ export default function Library() {
           })}
         </div>
         {all.length === 0 && (
-          <div className="rounded-[18px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">No rides yet. Build one on a computer, or restore the starter rides.</div>
+          <div className="rounded-[18px] border-2 border-dashed border-line p-6 text-center text-[14px] text-mist">{admin === true ? "No rides yet. Build one on a computer, or restore the starter rides." : "No rides yet. New rides are coming soon."}</div>
         )}
         {notice && <p className="pt-3 text-center text-[13px] text-ice">{notice}</p>}
         {hidden.length > 0 && (
@@ -132,7 +134,7 @@ export default function Library() {
             <button className="flex-none text-ice underline underline-offset-4" onClick={() => { try { localStorage.setItem("ridedeck-hint-dismissed", "1"); } catch { /* ignore */ } setHint(false); }}>Got it</button>
           </div>
         )}
-        <p className="pt-3 text-center text-[12px] font-light text-mist">Build rides and plan music on a computer.<br />{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</p>
+        <p className="pt-3 text-center text-[12px] font-light text-mist">{admin === true && <>Build rides and plan music on a computer.<br /></>}{status === "ok" ? "Database connected" : status === "loading" ? "Loading…" : status === "off" ? "Presets only" : "Database error"}</p>
         {dialog}
       </PhoneShell>
     );
@@ -149,24 +151,24 @@ export default function Library() {
             <span className={`text-[13px] font-medium uppercase tracking-[.18em] ${status === "error" ? "text-ice" : "text-mist"}`}>{statusText}</span>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setModal({ kind: "import" })} className="h-[44px] rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">
+            {admin === true && <button onClick={() => setModal({ kind: "import" })} className="h-[44px] rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">
               Import JSON
-            </button>
+            </button>}
             <AccountMenu className="h-[44px]" />
             <a href="/history" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">History</a>
-            <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>
+            {admin === true && <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>}
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
           {saved.length > 0 && (
             <Section label="My rides">
-              {saved.map((w) => <Card key={w.id} w={w} mine onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => setAsk({ w, mine: true })} />)}
+              {saved.map((w) => <Card key={w.id} w={w} mine admin={admin === true} onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => setAsk({ w, mine: true })} />)}
             </Section>
           )}
           {visiblePresets.length > 0 && (
             <Section label="Starter rides">
-              {visiblePresets.map((w) => <Card key={w.id} w={w} onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => setAsk({ w, mine: false })} />)}
+              {visiblePresets.map((w) => <Card key={w.id} w={w} admin={admin === true} onExport={() => setModal({ kind: "export", workout: w })} onDelete={() => setAsk({ w, mine: false })} />)}
             </Section>
           )}
           {saved.length === 0 && visiblePresets.length === 0 && (
@@ -194,7 +196,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Card({ w, mine, onExport, onDelete }: { w: Workout; mine?: boolean; onExport: () => void; onDelete: () => void }) {
+function Card({ w, mine, admin, onExport, onDelete }: { w: Workout; mine?: boolean; admin: boolean; onExport: () => void; onDelete: () => void }) {
   const climbs = w.segments.filter((s) => s.type === "climb").length;
   const sprints = w.segments.filter((s) => s.type === "sprint").length;
   return (
@@ -206,7 +208,7 @@ function Card({ w, mine, onExport, onDelete }: { w: Workout; mine?: boolean; onE
         </span>
         <span className="flex gap-4 text-[13px] font-normal text-mist">
           <a href={`/builder/${w.id}`} className="underline underline-offset-4">Details</a>
-          <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate to edit</a>
+          {admin && <a href={`/builder/new?from=${w.id}`} className="underline underline-offset-4">Duplicate to edit</a>}
           {w.playlistUrl && <a href={w.playlistUrl} target="_blank" rel="noopener noreferrer" className="text-ice underline underline-offset-4">Playlist ↗</a>}
           <button onClick={onExport} className="underline underline-offset-4">Export</button>
           <button onClick={onDelete} className="underline underline-offset-4">{mine ? "Delete" : "Remove"}</button>

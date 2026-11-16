@@ -9,6 +9,7 @@ All SQL lives here. Run migrations in order in the Supabase SQL editor (each is 
 | `backfill-owner.sql` | Gives all existing rows to one account (yours) | After you have signed up on the new sign-in page |
 | `migrations/0003_require_owner.sql` | Makes owners required and settings one row per person | Same release as the code for per-user settings |
 | `migrations/0004_invite_requests.sql` | The "Request an invite" table and `approve_invite(email)` | With the welcome page |
+| `migrations/0005_admins.sql` | The admin (curator) list and `is_admin()`. **Additive; run it BEFORE deploying the code that checks it.** | Admin role, stage A1 |
 
 ## Letting someone in
 People ask on the welcome page; requests appear in the `invite_requests` table (Table Editor). To approve one, run in the SQL editor:
@@ -36,3 +37,12 @@ The app switches to accounts mode when `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBL
 - the backfill and 0003 work, and deleting an account removes all of its data
 
 It needs PostgreSQL 14 or newer installed (server binaries `initdb` and `pg_ctl`). It never touches a real database.
+
+## The admin role (0005)
+Only admins can build, edit, delete or plan rides (the builder, the music planner and song lookups). Everyone else signed in can see rides, ride them and use History. The list is its own table, not a column on `invites`: "exempt from limits" must never grant admin.
+
+Order matters: run `0005_admins.sql`, **add yourself**, then deploy. The code asks the database `is_admin()` on every admin action and treats a failed check as "no", so deploying first would lock everyone (including you) out of the builder until the migration is in.
+
+Add an admin (SQL editor; use the exact address you sign in with, lowercase):
+`insert into public.admins (email, note) values ('you@example.com', 'curator');`
+List: `select email, note from public.admins;`  Remove: `delete from public.admins where email = 'you@example.com';`

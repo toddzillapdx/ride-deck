@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useAdmin } from "@/lib/useAdmin";
 import Stage from "./Stage";
 import { fmtClock, fmtTarget } from "@/lib/format";
 import { loadRideEx } from "@/lib/client";
@@ -17,6 +18,7 @@ function summary(s: RideSegment): string {
 
 /** An existing ride, read-only. To change it, DUPLICATE TO EDIT opens a copy in the builder. */
 export default function RideDetails({ id }: { id: string }) {
+  const admin = useAdmin();
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -75,10 +77,15 @@ export default function RideDetails({ id }: { id: string }) {
           </div>
           <div className="flex flex-none items-center gap-3">
             <a href={`/ride/${id}`} className="flex h-[52px] items-center rounded-full border-2 border-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ice">Ride</a>
-            <a href={`/builder/new?from=${encodeURIComponent(id)}`} className="flex h-[52px] items-center rounded-full bg-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ground">Duplicate to edit</a>
+            {admin === true && <a href={`/builder/new?from=${encodeURIComponent(id)}`} className="flex h-[52px] items-center rounded-full bg-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ground">Duplicate to edit</a>}
           </div>
         </div>
-        {!builtIn && (
+        {!builtIn && admin === false && ride.playlistUrl && isHttpUrl(ride.playlistUrl) && (
+          <div className="flex flex-none items-center gap-3">
+            <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 flex-none items-center rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice">Open playlist ↗</a>
+          </div>
+        )}
+        {!builtIn && admin === true && (
           <div className="flex flex-none items-center gap-3">
             <span className="flex-none text-[14px] font-medium uppercase tracking-[.14em] text-mist">Playlist</span>
             <input value={link} onChange={(e) => setLink(e.target.value)} onPaste={(e) => pasteLink(e, setLink)} onBlur={() => setLink(extractUrl(link) || link.trim())}

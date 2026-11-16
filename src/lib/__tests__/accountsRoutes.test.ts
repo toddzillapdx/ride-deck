@@ -25,7 +25,7 @@ const plan = (body: Record<string, unknown> = {}) =>
 beforeEach(() => {
   st.accountsOn = true; st.user = { id: "u1", email: "friend@example.com" }; st.passcode = "";
   st.quota = { allowed: true, used: 1, limit: 5, remaining: 4, resets_at: "2026-11-20T10:00:00Z", exempt: false };
-  st.rpc = vi.fn(async (name: string) => (name === "consume_quota" ? { data: st.quota, error: st.rpcError } : { data: null, error: null }));
+  st.rpc = vi.fn(async (name: string) => (name === "consume_quota" ? { data: st.quota, error: st.rpcError } : name === "is_admin" ? { data: true, error: null } : { data: null, error: null }));
   st.planner = vi.fn().mockResolvedValue({ songs: [{ title: "T", artist: "A", intensity: 5 }], notes: [] });
   st.tableCalls = [];
   process.env.ANTHROPIC_API_KEY = "test"; delete process.env.PLANNER_PASSCODE; delete process.env.PLAN_WEEKLY_LIMIT; delete process.env.SWAP_WEEKLY_LIMIT;
