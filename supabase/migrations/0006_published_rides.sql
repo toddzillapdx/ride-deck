@@ -3,9 +3,11 @@
 --
 -- The rules live here, in the database, so the app, a script or a mistake cannot get around them:
 --   * Only an admin can write rides or playlist links. Riders (signed-in) can read PUBLISHED rides only.
---   * A ride starts as a draft. It can only be published when it has an https link for every service
---     (Spotify, Apple Music, Amazon Music). No ride goes live without playlists.
---   * A published ride cannot lose a link, cannot be deleted (unpublish first), and once it has ever been published its
+--   * A ride starts as a draft. It can only be published when it has at least one https playlist link. No ride goes live
+--     without a playlist. (The app adds the stricter rule: a link for every music service that is switched on. Today that is
+--     Spotify and Amazon Music; Apple Music is supported here but switched off until playlists exist on it. Keeping the database
+--     rule at "at least one" means switching a service on later needs no migration.)
+--   * A published ride can never lose its last link, cannot be deleted (unpublish first), and once it has ever been published its
 --     segments are locked (a rider's history must keep matching what they rode). Title, blurb, month and links stay editable.
 
 -- ---- rides ------------------------------------------------------------------------------------------------
@@ -39,7 +41,7 @@ language plpgsql set search_path = public, pg_temp as $$
 begin
   if tg_op = 'INSERT' then
     if new.status <> 'draft' then
-      raise exception 'A ride starts as a draft. Add the three playlist links, then publish it.' using errcode = '23514';
+      raise exception 'A ride starts as a draft. Add its playlist links, then publish it.' using errcode = '23514';
     end if;
     new.published_at := null;
     return new;
@@ -50,8 +52,8 @@ begin
     raise exception 'The segments are locked once a ride has been published. Duplicate it to make a new version.' using errcode = '23514';
   end if;
   if new.status = 'published' and old.status <> 'published' then
-    if (select count(distinct p.service) from public.curated_playlists p where p.ride_id = new.id) < 3 then
-      raise exception 'Add a playlist link for Spotify, Apple Music and Amazon Music before publishing.' using errcode = '23514';
+    if not exists (select 1 from public.curated_playlists p where p.ride_id = new.id) then
+      raise exception 'Add at least one playlist link before publishing.' using errcode = '23514';
     end if;
     new.published_at := coalesce(old.published_at, now());
   else
@@ -84,9 +86,10 @@ begin
     new.updated_at := now();
     return new;
   end if;
-  -- DELETE: a published ride must keep all three links. (When a draft ride is deleted its links cascade; the ride row is already gone.)
-  if exists (select 1 from public.curated_rides r where r.id = old.ride_id and r.status = 'published') then
-    raise exception 'A published ride needs all three playlist links. Unpublish it first, or replace the link instead.' using errcode = '23514';
+  -- DELETE: a published ride must keep at least one link. (When a draft ride is deleted its links cascade; the ride row is already gone.)
+  if exists (select 1 from public.curated_rides r where r.id = old.ride_id and r.status = 'published')
+     and not exists (select 1 from public.curated_playlists p where p.ride_id = old.ride_id and p.service <> old.service) then
+    raise exception 'A published ride needs a playlist link. Replace the link instead, or unpublish the ride first.' using errcode = '23514';
   end if;
   return old;
 end $$;

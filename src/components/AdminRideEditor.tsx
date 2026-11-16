@@ -5,7 +5,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { LogoMark, Wordmark } from "./Logo";
 import { fmtClock } from "@/lib/format";
 import { extractUrl, pasteLink } from "@/lib/url";
-import { SERVICES, SERVICE_LABEL, linkWarning, missingServices, type Service } from "@/lib/services";
+import { ACTIVE_SERVICES, SERVICE_LABEL, linkWarning, missingServices, type Service } from "@/lib/services";
 import type { CuratedSummary } from "@/lib/db/curated";
 
 type Form = { title: string; blurb: string; month: string; links: Record<Service, string> };
@@ -14,7 +14,7 @@ const formOf = (r: CuratedSummary): Form => ({ title: r.title, blurb: r.blurb ??
 const input = "h-[48px] w-full min-w-0 rounded-[12px] border-2 border-line bg-tile px-3 text-[16px] text-ink outline-none focus:border-ice";
 const label = "text-[14px] font-medium uppercase tracking-[.14em] text-mist";
 
-/** Admin: one curated ride. Text, month, the three playlist links, publish / unpublish, a new version, delete a draft. */
+/** Admin: one curated ride. Text, month, the playlist links, publish / unpublish, a new version, delete a draft. */
 export default function AdminRideEditor({ id }: { id: string }) {
   const [ride, setRide] = useState<CuratedSummary | null>(null);
   const [form, setForm] = useState<Form | null>(null);
@@ -93,8 +93,8 @@ export default function AdminRideEditor({ id }: { id: string }) {
               <input className={input} type="month" value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })} /></label>
 
             <div className="flex flex-col gap-3 rounded-[18px] border-2 border-line bg-tile p-4">
-              <span className={label}>Playlists, one for each service</span>
-              {SERVICES.map((s) => {
+              <span className={label}>Playlists, one for each service ({ACTIVE_SERVICES.map((s) => SERVICE_LABEL[s]).join(" and ")})</span>
+              {ACTIVE_SERVICES.map((s) => {
                 const warn = linkWarning(s, form.links[s]);
                 return (
                   <label key={s} className="flex flex-col gap-1">
@@ -105,7 +105,7 @@ export default function AdminRideEditor({ id }: { id: string }) {
                   </label>
                 );
               })}
-              <span className="text-[14px] font-light text-mist">{missing.length ? `Still needed to publish: ${missing.map((m) => SERVICE_LABEL[m]).join(", ")}.` : "All three links are in."}</span>
+              <span className="text-[14px] font-light text-mist">{missing.length ? `Still needed to publish: ${missing.map((m) => SERVICE_LABEL[m]).join(", ")}.` : "All the links are in."}</span>
             </div>
 
             {msg && <p className={`m-0 text-[14px] ${msg.ok ? "text-ice" : "text-ice"}`} role="status">{msg.ok ? "✓ " : "⚠ "}{msg.text}</p>}

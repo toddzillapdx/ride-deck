@@ -51,10 +51,13 @@ List: `select email, note from public.admins;`  Remove: `delete from public.admi
 ## Published rides (0006)
 `curated_rides` holds the rides riders see; `curated_playlists` holds one link per ride per service; `ride_events` records what riders do (opened, playlist opened, started, finished, with their music service). The rules are enforced by the database, not just the app:
 - Only an admin can write rides or links. Riders can read published rides and their links, never drafts.
-- A ride starts as a draft. It can only be published when it has an https link for **all three** services.
-- A published ride cannot lose a link and cannot be deleted (unpublish first). Once a ride has ever been published its segments are locked (so a rider's History keeps matching what they rode). Title, description, month and links stay editable. To change segments, make a new version (a copy as a new draft).
+- A ride starts as a draft. It can only be published when it has at least one https playlist link. **The app is stricter:** a ride needs a link for every music service that is switched on (`ACTIVE_SERVICES` in `src/lib/services.ts`: today Spotify and Amazon Music; Apple Music is built but off until playlists exist on it). The database rule stays at "at least one" so switching a service on needs no migration.
+- A published ride can never lose its last link and cannot be deleted (unpublish first). Once a ride has ever been published its segments are locked (so a rider's History keeps matching what they rode). Title, description, month and links stay editable. To change segments, make a new version (a copy as a new draft).
+- A rider only sees rides that have a link for the service they chose.
 - A rider can record their own events and nobody can read them except the admin.
 
-Deploy order (do these in order): 1) run `0006_published_rides.sql` in the SQL editor, 2) check it with `select count(*) from public.curated_rides;` (should return 0), 3) then merge and deploy the code. The code is safe to deploy only after the tables exist.
+Switching Apple Music on later: add `"apple"` to `ACTIVE_SERVICES`. Riders can then choose it, the editor shows an Apple field, and every published ride shows as missing an Apple link until you add one (a rider on Apple sees only rides that have one).
 
-Playlists are added in the app: open a saved ride's details, tap **Publish as curated ride**, paste the three links on the page that opens, and tap Publish.
+Deploy order (do these in order): 1) run `0006_published_rides.sql` in the SQL editor (safe to re-run), 2) check it with `select count(*) from public.curated_rides;` (should return 0), 3) then merge and deploy the code. The code is only safe to deploy after the tables exist.
+
+Playlists are added in the app: open a saved ride's details, tap **Publish as curated ride**, paste the links on the page that opens, and tap Publish.

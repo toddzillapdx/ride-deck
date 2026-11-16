@@ -65,22 +65,22 @@ beforeAll(async () => {
 beforeEach(async () => { await root.query("delete from public.ride_events"); await root.query("update public.curated_rides set status = 'draft'"); await root.query("delete from public.curated_playlists"); await root.query("delete from public.curated_rides"); });
 afterAll(async () => { await root?.end(); });
 
-describe("publishing needs all three playlists", () => {
+describe("publishing needs a playlist", () => {
   it("a ride starts as a draft; inserting it already published is refused", async () => {
     await rootFails("insert into public.curated_rides (title, ride, status) values ('x', '{}', 'published')", /starts as a draft/);
   });
-  for (const links of [[], ["spotify"], ["spotify", "apple"], ["apple", "amazon"]] as (keyof typeof URLS)[][]) {
-    it(`cannot be published with ${links.length} link(s): ${links.join(", ") || "none"}`, async () => {
+  it("cannot be published with no playlist link at all", async () => {
+    const id = await makeRide("R", []);
+    await as(ADMIN, (q) => fails(q, "update public.curated_rides set status = 'published' where id = $1", /at least one playlist link/, [id]));
+  });
+  for (const links of [["spotify"], ["amazon"], ["spotify", "amazon"], ["spotify", "apple", "amazon"]] as (keyof typeof URLS)[][]) {
+    it(`can be published with ${links.join(" + ")}, and published_at is set`, async () => {
       const id = await makeRide("R", links);
-      await as(ADMIN, (q) => fails(q, "update public.curated_rides set status = 'published' where id = $1", /before publishing/, [id]));
+      const r = await as(ADMIN, (q) => q("update public.curated_rides set status = 'published' where id = $1 returning status, published_at", [id]));
+      expect(r.rows[0].status).toBe("published");
+      expect(r.rows[0].published_at).not.toBeNull();
     });
   }
-  it("can be published with all three, and published_at is set", async () => {
-    const id = await makeRide("R", ["spotify", "apple", "amazon"]);
-    const r = await as(ADMIN, (q) => q("update public.curated_rides set status = 'published' where id = $1 returning status, published_at", [id]));
-    expect(r.rows[0].status).toBe("published");
-    expect(r.rows[0].published_at).not.toBeNull();
-  });
   it("links must be https with no spaces, for a known service", async () => {
     const id = await makeRide("R");
     const ins = (service: string, url: string) => as(ADMIN, (q) => fails(q, "insert into public.curated_playlists (ride_id, service, url) values ($1, $2, $3)", /check/i, [id, service, url]));
@@ -98,12 +98,19 @@ describe("publishing needs all three playlists", () => {
 });
 
 describe("a live ride stays whole", () => {
-  it("cannot lose a playlist link while published, but a link can be replaced", async () => {
-    const id = await makeRide("R", ["spotify", "apple", "amazon"], "published");
-    await as(ADMIN, (q) => fails(q, "delete from public.curated_playlists where ride_id = $1 and service = 'apple'", /needs all three/, [id]));
-    const r = await as(ADMIN, (q) => q("update public.curated_playlists set url = 'https://music.apple.com/new' where ride_id = $1 and service = 'apple' returning url", [id]));
-    expect(r.rows[0].url).toBe("https://music.apple.com/new");
-    await as(ADMIN, (q) => fails(q, "update public.curated_playlists set service = 'spotify' where ride_id = $1 and service = 'apple'", /cannot move|duplicate|violates/i, [id]));
+  it("a published ride can never lose its last playlist link, but a link can be replaced", async () => {
+    const id = await makeRide("R", ["spotify"], "published");
+    await as(ADMIN, (q) => fails(q, "delete from public.curated_playlists where ride_id = $1 and service = 'spotify'", /needs a playlist link/, [id]));
+    const r = await as(ADMIN, (q) => q("update public.curated_playlists set url = 'https://open.spotify.com/new' where ride_id = $1 and service = 'spotify' returning url", [id]));
+    expect(r.rows[0].url).toBe("https://open.spotify.com/new");
+    await as(ADMIN, (q) => fails(q, "update public.curated_playlists set service = 'apple' where ride_id = $1 and service = 'spotify'", /cannot move/i, [id]));
+  });
+  it("a published ride with two links can drop one (the app guards the switched-on services), but not both", async () => {
+    const id = await makeRide("R", ["spotify", "amazon"], "published");
+    await as(ADMIN, async (q) => {
+      await q("delete from public.curated_playlists where ride_id = $1 and service = 'amazon'", [id]);
+      await fails(q, "delete from public.curated_playlists where ride_id = $1 and service = 'spotify'", /needs a playlist link/, [id]);
+    });
   });
   it("cannot be deleted while published; a draft can be, and its links go with it", async () => {
     const live = await makeRide("Live", ["spotify", "apple", "amazon"], "published");

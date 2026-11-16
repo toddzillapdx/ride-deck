@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readRide, rideDuration, type Ride } from "../engine";
 import type { Workout } from "../types";
-import { SERVICES, isHttpsUrl, missingServices, type Service } from "../services";
+import { ACTIVE_SERVICES, SERVICES, SERVICE_LABEL, isHttpsUrl, missingServices, type Service } from "../services";
 import { NotFound, RuleBroken, db, must } from "./client";
 import { rowToRaw, rowToWorkout, type RideRow } from "./rides";
 
@@ -65,6 +65,7 @@ export async function listPublished(service: Service | null, c: Client = db()): 
   for (const row of rows) {
     try {
       const l = linksOf(links, row.id);
+      if (service && !l[service]) continue; // a rider only sees rides that have a playlist on their service
       const workout = rowToWorkout(asRideRow(row, service ? l[service] : undefined));
       out.push({ id: curatedId(row.id), title: row.title, blurb: row.blurb, month: row.month, workout, services: SERVICES.filter((s) => l[s]) });
     } catch { /* a ride that cannot be read is left out of the library rather than breaking it */ }
@@ -144,10 +145,15 @@ export async function setLinks(id: string, links: Partial<Record<Service, string
   const uuid = curatedUuid(id);
   await findCurated(id, c); // 404 for a ride that does not exist
   const have = new Set((await linkRows([uuid], c)).map((r) => r.service));
+  const { row } = await findCurated(id, c);
   for (const service of SERVICES) {
     if (!(service in links)) continue;
     const url = (links[service] ?? "").trim();
     if (!url) {
+      // A live ride keeps a link for every switched-on service (the database only guarantees at least one).
+      if (have.has(service) && row.status === "published" && ACTIVE_SERVICES.includes(service)) {
+        throw new RuleBroken(`A live ride needs a ${SERVICE_LABEL[service]} link. Replace it with another one, or unpublish the ride first.`);
+      }
       if (have.has(service)) run(await c.from("curated_playlists").delete().eq("ride_id", uuid).eq("service", service));
       continue;
     }

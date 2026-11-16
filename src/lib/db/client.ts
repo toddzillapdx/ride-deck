@@ -5,7 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export class NotConfigured extends Error {}
 /** Accounts are on and nobody is signed in (or the session ended). Routes answer 401. */
 export class Unauthorized extends Error {}
-/** A rule the database enforces refused the change (e.g. publishing without all three playlist links). Routes answer 400 with its message. */
+/** A rule the database enforces refused the change (e.g. publishing without a playlist link). Routes answer 400 with its message. */
 export class RuleBroken extends Error {}
 /** Signed in, but this is for the admin only. Routes answer 403. */
 export class Forbidden extends Error {}

@@ -3,7 +3,7 @@ import { FakeDb } from "../db/__tests__/fakeDb";
 import { PRESETS } from "../presets";
 import { PRESETS_V2 } from "../presetsV2";
 import { isCuratedId, curatedId } from "../db/curated";
-import { SERVICES, isHttpsUrl, linkWarning, missingServices, serviceOfUrl } from "../services";
+import { ACTIVE_SERVICES, SERVICES, isHttpsUrl, linkWarning, missingServices, serviceOfUrl } from "../services";
 
 // ---- stand-ins: accounts on, a pretend signed-in person, a pretend admin answer, an in-memory database ----------------------
 const st = { user: { id: "u1", email: "rider@example.com" } as { id: string; email: string } | null, admin: false, fake: new FakeDb() };
@@ -42,7 +42,7 @@ function seed() {
     { ride_id: UUID_LIVE, service: "spotify", url: URLS.spotify }, { ride_id: UUID_LIVE, service: "apple", url: URLS.apple }, { ride_id: UUID_LIVE, service: "amazon", url: URLS.amazon },
     { ride_id: UUID_DRAFT, service: "spotify", url: URLS.spotify },
   ]);
-  st.fake.seed("app_settings", [{ key: "main", value: { hiddenPresets: [], service: "apple" } }]);
+  st.fake.seed("app_settings", [{ key: "main", value: { hiddenPresets: [], service: "amazon" } }]);
 }
 beforeEach(() => { st.user = { id: "u1", email: "rider@example.com" }; st.admin = false; seed(); vi.spyOn(console, "error").mockImplementation(() => undefined); });
 
@@ -52,17 +52,27 @@ describe("riders see published rides only", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.rides.map((r: { id: string }) => r.id)).toEqual([LIVE]);
-    expect(body.rides[0].workout.playlistUrl).toBe(URLS.apple);
+    expect(body.rides[0].workout.playlistUrl).toBe(URLS.amazon);
     expect(body.rides[0].services).toEqual(["spotify", "apple", "amazon"]);
-    expect(body.service).toBe("apple");
+    expect(body.service).toBe("amazon");
   });
   it("the ride screen loads a published ride with the rider's playlist link", async () => {
     const res = await call("rides/[id]", "GET", undefined, { id: LIVE });
     expect(res.status).toBe(200);
     expect((await res.json()).name).toBe("Hills and Hooks");
     const raw = await (await (await import("../../app/api/rides/[id]/route")).GET(new Request("http://x/api?format=raw"), { params: { id: LIVE } })).json();
-    expect(raw.playlistUrl).toBe(URLS.apple);
+    expect(raw.playlistUrl).toBe(URLS.amazon);
     expect(raw.id).toBe(LIVE);
+  });
+  it("a rider only sees rides that have a playlist on their service", async () => {
+    const SPOTIFY_ONLY = "44444444-4444-4444-8444-444444444444";
+    st.fake.seed("curated_rides", [{ id: SPOTIFY_ONLY, title: "Spotify only", blurb: null, month: null, ride: storedRide, total_seconds: 600, status: "published", published_at: "2027-01-03T00:00:00Z" }]);
+    st.fake.seed("curated_playlists", [{ ride_id: SPOTIFY_ONLY, service: "spotify", url: URLS.spotify }]);
+    const ids = async () => (await (await call("curated", "GET")).json()).rides.map((r: { id: string }) => r.id).sort();
+    st.fake.table("app_settings")[0].value = { hiddenPresets: [], service: "amazon" };
+    expect(await ids()).toEqual([LIVE]);
+    st.fake.table("app_settings")[0].value = { hiddenPresets: [], service: "spotify" };
+    expect(await ids()).toEqual([LIVE, curatedId(SPOTIFY_ONLY)].sort());
   });
   it("a rider asking for a draft gets 404, the same as for a ride that does not exist", async () => {
     expect((await call("rides/[id]", "GET", undefined, { id: DRAFT })).status).toBe(404);
@@ -107,22 +117,32 @@ describe("admin management", () => {
     expect(rides).toHaveLength(2);
     const draft = rides.find((r: { id: string }) => r.id === DRAFT);
     expect(draft.status).toBe("draft");
-    expect(draft.missing).toEqual(["apple", "amazon"]);
+    expect(draft.missing).toEqual(["amazon"]);
     expect(rides.find((r: { id: string }) => r.id === LIVE).missing).toEqual([]);
   });
   it("publishing without all three links is refused with a plain message, and nothing changes", async () => {
     st.admin = true;
     const res = await call("admin/curated/[id]", "PATCH", { status: "published" }, { id: DRAFT });
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/Apple Music, Amazon Music before publishing/);
+    expect((await res.json()).error).toMatch(/Add a playlist link for Amazon Music before publishing/);
     expect(st.fake.table("curated_rides").find((r) => r.id === UUID_DRAFT)!.status).toBe("draft");
   });
-  it("adding the missing links and publishing in one request works", async () => {
+  it("adding the missing link and publishing in one request works (Apple Music is not needed)", async () => {
     st.admin = true;
-    const res = await call("admin/curated/[id]", "PATCH", { links: { apple: URLS.apple, amazon: URLS.amazon }, status: "published" }, { id: DRAFT });
+    const res = await call("admin/curated/[id]", "PATCH", { links: { amazon: URLS.amazon }, status: "published" }, { id: DRAFT });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "published", missing: [] });
-    expect(st.fake.table("curated_playlists").filter((p) => p.ride_id === UUID_DRAFT)).toHaveLength(3);
+    expect(st.fake.table("curated_playlists").filter((p) => p.ride_id === UUID_DRAFT)).toHaveLength(2);
+  });
+  it("a live ride cannot lose the link for a service that is switched on", async () => {
+    st.admin = true;
+    const res = await call("admin/curated/[id]", "PATCH", { links: { amazon: "" } }, { id: LIVE });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/A live ride needs a Amazon Music link/);
+    expect(st.fake.table("curated_playlists").some((p) => p.ride_id === UUID_LIVE && p.service === "amazon")).toBe(true);
+    // a link can be replaced, and the switched-off service can be dropped
+    expect((await call("admin/curated/[id]", "PATCH", { links: { amazon: "https://music.amazon.com/new" } }, { id: LIVE })).status).toBe(200);
+    expect((await call("admin/curated/[id]", "PATCH", { links: { apple: "" } }, { id: LIVE })).status).toBe(200);
   });
   it("a link that is not a full https address is refused before anything is saved", async () => {
     st.admin = true;
@@ -171,8 +191,9 @@ describe("the rider's music service", () => {
     b = await (await call("settings", "PUT", { service: null })).json();
     expect(b.service).toBeNull();
   });
-  it("only the three services are accepted", async () => {
+  it("only the switched-on services are accepted", async () => {
     expect((await call("settings", "PUT", { service: "tidal" })).status).toBe(400);
+    expect((await call("settings", "PUT", { service: "apple" })).status).toBe(400); // built, but switched off
     expect((await call("settings", "PUT", {})).status).toBe(400);
   });
 });
@@ -181,7 +202,7 @@ describe("events", () => {
   it("records the kind, the ride and the rider's service", async () => {
     const res = await call("events", "POST", { rideId: LIVE, kind: "playlist_opened" });
     expect(res.status).toBe(200);
-    expect(st.fake.table("ride_events")).toEqual([{ ride_id: LIVE, kind: "playlist_opened", service: "apple" }]);
+    expect(st.fake.table("ride_events")).toEqual([{ ride_id: LIVE, kind: "playlist_opened", service: "amazon" }]);
   });
   it("refuses junk and needs a signed-in rider", async () => {
     expect((await call("events", "POST", { rideId: LIVE, kind: "hacked" })).status).toBe(400);
@@ -211,10 +232,12 @@ describe("links and services", () => {
     expect(linkWarning("apple", "https://example.com/x")).toMatch(/doesn't look like a Apple Music link/);
     expect(linkWarning("apple", "http://music.apple.com/x")).toMatch(/full https/);
   });
-  it("publishing needs all three, https only", () => {
-    expect(missingServices({})).toEqual([...SERVICES]);
-    expect(missingServices({ spotify: URLS.spotify, apple: "  ", amazon: "http://x" })).toEqual(["apple", "amazon"]);
-    expect(missingServices(URLS)).toEqual([]);
+  it("publishing needs a link for every switched-on service, https only", () => {
+    expect([...ACTIVE_SERVICES]).toEqual(["spotify", "amazon"]);
+    expect(SERVICES).toContain("apple"); // still known, just not required
+    expect(missingServices({})).toEqual(["spotify", "amazon"]);
+    expect(missingServices({ spotify: URLS.spotify, apple: URLS.apple, amazon: "http://x" })).toEqual(["amazon"]);
+    expect(missingServices({ spotify: URLS.spotify, amazon: URLS.amazon })).toEqual([]);
     expect(isHttpsUrl("https://a.example/x y")).toBe(false);
   });
   it("only real published-ride ids are recognised", () => {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { authConfigured } from "@/lib/auth/config";
 import { dbConfigured, failResponse, getSettings, putSettings, requester } from "@/lib/db";
 import { PRESETS } from "@/lib/presets";
-import { isService } from "@/lib/services";
+import { isActiveService } from "@/lib/services";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export async function PUT(req: Request) {
   const hasHidden = body.hiddenPresets !== undefined, hasService = body.service !== undefined;
   if (!hasHidden && !hasService) return NextResponse.json({ error: "Nothing to save" }, { status: 400 });
   if (hasHidden && !Array.isArray(body.hiddenPresets)) return NextResponse.json({ error: "hiddenPresets must be an array" }, { status: 400 });
-  if (hasService && body.service !== null && !isService(body.service)) return NextResponse.json({ error: "service must be spotify, apple or amazon" }, { status: 400 });
+  if (hasService && body.service !== null && !isActiveService(body.service)) return NextResponse.json({ error: "service must be spotify or amazon" }, { status: 400 });
   try {
     const { client, accounts } = await requester();
     const current = await getSettings(client);

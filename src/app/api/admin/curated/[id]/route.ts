@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NotFound, deleteCurated, failResponse, getCuratedSummary, isCuratedId, requireAdmin, setLinks, updateCurated, type CuratedPatch } from "@/lib/db";
-import { SERVICES, isHttpsUrl, missingServices, type Service } from "@/lib/services";
+import { SERVICES, SERVICE_LABEL, isHttpsUrl, missingServices, type Service } from "@/lib/services";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: { id: string } };
@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 /**
  * Admin: change a curated ride. Body (all optional): { title, blurb, month, links: { spotify, apple, amazon }, status }.
  * Links are saved first, then the rest, so one request can add the last link and publish. The database enforces the rules
- * (all three links before publishing, no losing a link while live, segments locked) and its message comes back as a 400.
+ * (a link for every switched-on service before publishing, no losing a link while live, segments locked) and its message comes back as a 400.
  */
 export async function PATCH(req: Request, { params }: Ctx) {
   const no = bad(params.id); if (no) return no;
@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       // Say it plainly before touching anything. (The database refuses it too.)
       const after = { ...(await getCuratedSummary(params.id, client)).links, ...Object.fromEntries(Object.entries(links ?? {}).filter(([, v]) => v !== undefined)) } as Record<string, string | null>;
       const missing = missingServices(after);
-      if (missing.length) return NextResponse.json({ error: `Add a playlist link for ${missing.map((m) => ({ spotify: "Spotify", apple: "Apple Music", amazon: "Amazon Music" })[m]).join(", ")} before publishing.`, code: "rule" }, { status: 400 });
+      if (missing.length) return NextResponse.json({ error: `Add a playlist link for ${missing.map((m) => SERVICE_LABEL[m]).join(", ")} before publishing.`, code: "rule" }, { status: 400 });
     }
     if (links) await setLinks(params.id, links, client);
     return NextResponse.json(await updateCurated(params.id, patch, client));

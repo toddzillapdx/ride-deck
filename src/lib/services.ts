@@ -1,10 +1,19 @@
-/** The music services a ride can have a playlist on. The same three are offered to riders. */
+/** Every music service the app knows about. The database accepts a playlist link for any of these. */
 export const SERVICES = ["spotify", "apple", "amazon"] as const;
 export type Service = (typeof SERVICES)[number];
 
+export const isService = (v: unknown): v is Service => typeof v === "string" && (SERVICES as readonly string[]).includes(v);
+
+/**
+ * The services switched ON: riders can choose these, and a ride needs a link for each to be published. Apple Music is built but off
+ * until playlists exist on it (it needs a subscription to make them). To switch it on, add "apple" here: the picker, the editor and
+ * the publish rule follow, and existing rides then show as missing an Apple link until one is added.
+ */
+export const ACTIVE_SERVICES: readonly Service[] = ["spotify", "amazon"];
+export const isActiveService = (v: unknown): v is Service => isService(v) && ACTIVE_SERVICES.includes(v);
+
 export const SERVICE_LABEL: Record<Service, string> = { spotify: "Spotify", apple: "Apple Music", amazon: "Amazon Music" };
 
-export const isService = (v: unknown): v is Service => typeof v === "string" && (SERVICES as readonly string[]).includes(v);
 
 /** A usable playlist link: https, one word, not absurdly long. (The database checks the same thing.) */
 export function isHttpsUrl(v: unknown): v is string {
@@ -38,7 +47,7 @@ export function linkWarning(service: Service, url: string): string | null {
   return found ? `This looks like a ${SERVICE_LABEL[found]} link, not ${SERVICE_LABEL[service]}.` : `This doesn't look like a ${SERVICE_LABEL[service]} link. Check it opens the right playlist.`;
 }
 
-/** Every service has a link: the rule for publishing. */
+/** The services that still need a link before a ride can be published: every switched-on service must have one. */
 export function missingServices(links: Partial<Record<Service, string | null | undefined>>): Service[] {
-  return SERVICES.filter((s) => !isHttpsUrl((links[s] ?? "").trim()));
+  return ACTIVE_SERVICES.filter((s) => !isHttpsUrl((links[s] ?? "").trim()));
 }
