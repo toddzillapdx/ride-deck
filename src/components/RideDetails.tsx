@@ -113,7 +113,7 @@ export default function RideDetails({ id }: { id: string }) {
             {ride.playlistUrl && isHttpUrl(ride.playlistUrl) && <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 flex-none items-center rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice">Open ↗</a>}
           </div>
         )}
-        {warnings.map((w, i) => <p key={i} className="m-0 text-[14px] text-ice">⚠ {w.message}</p>)}
+        {admin === true && warnings.map((w, i) => <p key={i} className="m-0 text-[14px] text-ice">⚠ {w.message}</p>)}
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
           {ride.segments.map((s, i) => (
             <div key={i} className="flex flex-col gap-1 rounded-[16px] border-2 border-line bg-tile px-5 py-3">
@@ -126,10 +126,13 @@ export default function RideDetails({ id }: { id: string }) {
             </div>
           ))}
         </div>
-        <div className="flex flex-none items-center justify-between">
-          <span className="text-[14px] font-light text-mist">{msg ?? "To change this ride, duplicate it: the original stays as it is."}</span>
-          {!builtIn && <button onClick={remove} className="h-11 rounded-full border-2 border-line px-6 text-[14px] text-mist">Delete ride</button>}
-        </div>
+        {/* Changing or deleting a ride is for the admin. A rider only sees an error message here, if one comes up. */}
+        {(admin === true || msg) && (
+          <div className="flex flex-none items-center justify-between">
+            <span className="text-[14px] font-light text-mist">{msg ?? (admin !== true ? "" : published ? "The segments of a published ride are locked. To change them, make a new version under Manage." : "To change this ride, duplicate it: the original stays as it is.")}</span>
+            {admin === true && !builtIn && !published && <button onClick={remove} className="h-11 rounded-full border-2 border-line px-6 text-[14px] text-mist">Delete ride</button>}
+          </div>
+        )}
       </div>
     </Stage>
   );
