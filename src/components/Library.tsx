@@ -106,7 +106,7 @@ export default function Library() {
           <div className="flex flex-none items-center gap-1.5"><AccountMenu className="h-[40px] !px-3" /><a href="/history" className="flex h-[40px] items-center rounded-full border-2 border-line px-3 text-[14px] text-ink">History</a></div>
         </div>
         {serviceBlock && <div className="pb-3">{serviceBlock}</div>}
-        {admin === true && <a href="/admin/rides" className="mb-3 flex h-[44px] items-center justify-center rounded-full border-2 border-line text-[14px] text-ink">Manage published rides</a>}
+        {admin === true && <a href="/admin" className="mb-3 flex h-[44px] items-center justify-center rounded-full border-2 border-line text-[14px] text-ink">Admin</a>}
         <div className={`grid gap-2 ${layout.landscape ? "grid-cols-2" : "grid-cols-1"}`}>
           {published.map((r) => <PublishedCard key={r.id} r={r} service={service} phone />)}
           {saved.map((w) => {
@@ -161,7 +161,7 @@ export default function Library() {
             </button>}
             <AccountMenu className="h-[44px]" />
             <a href="/history" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">History</a>
-            {admin === true && <a href="/admin/rides" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">Published rides</a>}
+            {admin === true && <a href="/admin" className="flex h-[44px] items-center rounded-full border-2 border-line px-5 text-[14px] font-normal text-ink">Admin</a>}
             {admin === true && <a href="/builder/new" className="flex h-[44px] items-center rounded-full bg-ice px-6 text-[14px] font-medium text-ground">New ride</a>}
           </div>
         </div>

@@ -19,7 +19,7 @@ export default function AdminRides() {
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 pb-8">
         <div className="flex items-center justify-between gap-2">
           <a href="/" aria-label="RideDeck home" className="flex min-w-0 items-center gap-2"><LogoMark size={30} /><Wordmark size={18} /></a>
-          <a href="/" className="flex h-[40px] flex-none items-center rounded-full border-2 border-line px-3 text-[14px] text-ink">← Library</a>
+          <a href="/admin" className="flex h-[40px] flex-none items-center rounded-full border-2 border-line px-3 text-[14px] text-ink">← Admin</a>
         </div>
         <h1 className="m-0 text-[26px] font-light uppercase" style={{ letterSpacing: ".02em" }}>Published rides</h1>
         <p className="m-0 text-[14px] font-light leading-snug text-mist">A ride goes live only when it has a playlist link for {ACTIVE_SERVICES.map((s) => SERVICE_LABEL[s]).join(" and ")}. To add one, open a saved ride's details and tap <b className="font-medium text-ice">Publish as curated ride</b>.</p>

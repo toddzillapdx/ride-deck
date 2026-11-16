@@ -62,3 +62,18 @@ describe("admin role", () => {
     expect(r.rows[0].n).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("admin log", () => {
+  it("is invisible and read-only to everyone but the server", async () => {
+    await expect(as(RIDER, (q) => q("select * from public.admin_log"))).rejects.toThrow(/permission denied/i);
+    await expect(as(RIDER, (q) => q("insert into public.admin_log (admin_email, action) values ('x', 'y')"))).rejects.toThrow(/permission denied/i);
+    await expect(as(ADMIN, (q) => q("select * from public.admin_log"))).rejects.toThrow(/permission denied/i); // even the admin goes through the server
+    await expect(as("anon", (q) => q("select * from public.admin_log"))).rejects.toThrow(/permission denied/i);
+  });
+  it("the server can write and read it", async () => {
+    await as("service", async (q) => {
+      await q("insert into public.admin_log (admin_email, action, target, detail) values ('boss@example.com', 'approve', 'a@example.com', 'exempt')");
+      expect((await q("select count(*)::int n from public.admin_log")).rows[0].n).toBeGreaterThanOrEqual(1);
+    });
+  });
+});

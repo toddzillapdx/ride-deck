@@ -10,6 +10,7 @@ All SQL lives here. Run migrations in order in the Supabase SQL editor (each is 
 | `migrations/0003_require_owner.sql` | Makes owners required and settings one row per person | Same release as the code for per-user settings |
 | `migrations/0004_invite_requests.sql` | The "Request an invite" table and `approve_invite(email)` | With the welcome page |
 | `migrations/0005_admins.sql` | The admin (curator) list and `is_admin()`. **Additive; run it BEFORE deploying the code that checks it.** | Admin role, stage A1 |
+| `migrations/0007_admin_log.sql` | A log of what the admin does in the console (approve, decline, disable...). Additive. Not readable by anyone but the server. | Admin console |
 | `migrations/0006_published_rides.sql` | Published rides, their playlist links (Spotify, Apple Music, Amazon Music) and ride events. Needs 0005. **Run it BEFORE deploying the code that uses it.** | Published rides, stage A2 |
 
 ## Letting someone in
@@ -61,3 +62,12 @@ Switching Apple Music on later: add `"apple"` to `ACTIVE_SERVICES`. Riders can t
 Deploy order (do these in order): 1) run `0006_published_rides.sql` in the SQL editor (safe to re-run), 2) check it with `select count(*) from public.curated_rides;` (should return 0), 3) then merge and deploy the code. The code is only safe to deploy after the tables exist.
 
 Playlists are added in the app: open a saved ride's details, tap **Publish as curated ride**, paste the links on the page that opens, and tap Publish.
+
+## The admin console (0007)
+`/admin` (admin only) replaces most work in the Supabase dashboard: new invite requests (approve or decline), inviting someone directly, people invited who have not signed in yet (resend the email, remove), riders (status, last ride, ride count, music service, disable or enable, remove or restore the weekly planner limit) and a log of what you did. It reads and writes with the service key, only after checking the caller is an admin.
+
+Run `0007_admin_log.sql` before deploying the code. Nothing else needs a migration.
+
+Optional, for automatic invitation emails: set `RESEND_API_KEY` (a Resend key with sending access) in Vercel for Production and Preview, then redeploy. Without it, approving still works and the console opens the invitation in your own mail app instead. Optional: `INVITE_EMAIL_FROM` (default `RideDeck <hello@ridedeck.app>`), `INVITE_REPLY_TO` (where replies go), `NEXT_PUBLIC_SITE_URL` (default `https://ridedeck.app`).
+
+Disabling a rider bans the account in Supabase Auth: they cannot sign in until enabled; their rides and history are kept. A disabled person who asks for a code gets the usual "we sent a code" answer and no email (the form never says who is invited or blocked).
