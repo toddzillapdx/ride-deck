@@ -4,6 +4,7 @@ import { effortWord } from "@/lib/engine";
 import { NoteIcon } from "./Icons";
 import { PauseIcon } from "./RideControls";
 import { GROUND, ICE, INK, MIST, WORK_BG } from "@/lib/rideTheme";
+import { trackEvent } from "@/lib/events";
 import { countdownInfo, nextWord, sections, segTitle, segmentBar, type RideViewData } from "@/lib/rideLabels";
 
 
@@ -139,7 +140,7 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
         </div>
         <div className={`flex flex-none gap-2 ${landscape ? "" : "w-full"}`}>
           {!landscape && <PauseButton onClick={onPause} grow onIce={onIce} />}
-          {playlist && <a href={playlist} target="_blank" rel="noopener noreferrer" className="flex h-[52px] flex-none items-center gap-2 rounded-full border-2 border-line bg-tile px-4 text-[15px] font-medium text-ink"><NoteIcon size={18} color={ICE} />Playlist</a>}
+          {playlist && <a href={playlist} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent(ride.id, "playlist_opened")} className="flex h-[52px] flex-none items-center gap-2 rounded-full border-2 border-line bg-tile px-4 text-[15px] font-medium text-ink"><NoteIcon size={18} color={ICE} />Playlist</a>}
           <button onClick={onMore} className="flex h-[52px] flex-none items-center rounded-full border-2 border-line bg-tile px-5 text-[15px] font-medium text-ink">More</button>
         </div>
       </div>

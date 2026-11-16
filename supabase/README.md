@@ -10,6 +10,7 @@ All SQL lives here. Run migrations in order in the Supabase SQL editor (each is 
 | `migrations/0003_require_owner.sql` | Makes owners required and settings one row per person | Same release as the code for per-user settings |
 | `migrations/0004_invite_requests.sql` | The "Request an invite" table and `approve_invite(email)` | With the welcome page |
 | `migrations/0005_admins.sql` | The admin (curator) list and `is_admin()`. **Additive; run it BEFORE deploying the code that checks it.** | Admin role, stage A1 |
+| `migrations/0006_published_rides.sql` | Published rides, their playlist links (Spotify, Apple Music, Amazon Music) and ride events. Needs 0005. **Run it BEFORE deploying the code that uses it.** | Published rides, stage A2 |
 
 ## Letting someone in
 People ask on the welcome page; requests appear in the `invite_requests` table (Table Editor). To approve one, run in the SQL editor:
@@ -46,3 +47,14 @@ Order matters: run `0005_admins.sql`, **add yourself**, then deploy. The code as
 Add an admin (SQL editor; use the exact address you sign in with, lowercase):
 `insert into public.admins (email, note) values ('you@example.com', 'curator');`
 List: `select email, note from public.admins;`  Remove: `delete from public.admins where email = 'you@example.com';`
+
+## Published rides (0006)
+`curated_rides` holds the rides riders see; `curated_playlists` holds one link per ride per service; `ride_events` records what riders do (opened, playlist opened, started, finished, with their music service). The rules are enforced by the database, not just the app:
+- Only an admin can write rides or links. Riders can read published rides and their links, never drafts.
+- A ride starts as a draft. It can only be published when it has an https link for **all three** services.
+- A published ride cannot lose a link and cannot be deleted (unpublish first). Once a ride has ever been published its segments are locked (so a rider's History keeps matching what they rode). Title, description, month and links stay editable. To change segments, make a new version (a copy as a new draft).
+- A rider can record their own events and nobody can read them except the admin.
+
+Deploy order (do these in order): 1) run `0006_published_rides.sql` in the SQL editor, 2) check it with `select count(*) from public.curated_rides;` (should return 0), 3) then merge and deploy the code. The code is safe to deploy only after the tables exist.
+
+Playlists are added in the app: open a saved ride's details, tap **Publish as curated ride**, paste the three links on the page that opens, and tap Publish.

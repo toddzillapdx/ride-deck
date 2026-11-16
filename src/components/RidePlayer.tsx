@@ -17,6 +17,7 @@ import type { RideLog } from "@/lib/history";
 import PauseOverlay from "./PauseOverlay";
 import { BigButton, CtlButton, HoldButton } from "./RideControls";
 import { NoteIcon } from "./Icons";
+import { trackEvent } from "@/lib/events";
 
 const TAP_EVERY = 600; // tap prompt cadence (seconds of ride time)
 const STORE_KEY = "ridedeck-active-ride";
@@ -158,6 +159,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
     setStage("riding");
     setNextPrompt(clock.elapsedMs / 1000 + TAP_EVERY);
     persist();
+    trackEvent(ride.id, "started");
   };
   const toggle = () => {
     if (clock.running) { clock.pause(); setMenu(false); } else clock.start();
@@ -172,6 +174,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
     startLog({ elapsedSec: sec, rideSec: sec, stretchSec: 0, segmentsCompleted: segIndex, endedEarly: true });
     setStage("calories");
     setMenu(false);
+    trackEvent(ride.id, "finished");
   };
   /** FINISH RIDE on the stretch screen: stop the clock, record totals, ask for calories. */
   const finishRide = () => {
@@ -182,6 +185,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
     setFinal({ elapsedSec: all, rideSec: Math.round(total), stretchSec, endedEarly: false, kcal: undefined });
     updateLog({ elapsedSec: all, stretchSec }, { elapsedSec: all, rideSec: Math.round(total), stretchSec, segmentsCompleted: segs.length });
     setStage("calories");
+    trackEvent(ride.id, "finished");
   };
   const fullFor = (f: typeof final, kcal?: number) => ({
     ...(kcal === undefined ? {} : { kcal }), elapsedSec: f.elapsedSec, rideSec: f.rideSec, stretchSec: f.stretchSec,
@@ -244,7 +248,7 @@ export default function RidePlayer({ ride }: { ride: Ride }) {
             <BigButton onClick={startRide} small>Start ride</BigButton>
             <div className="flex flex-wrap items-center justify-center gap-3">
               {ride.playlistUrl && (
-                <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-[52px] items-center gap-2 rounded-full border-2 border-line px-5 text-[16px] font-medium text-ice">
+                <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent(ride.id, "playlist_opened")} className="flex h-[52px] items-center gap-2 rounded-full border-2 border-line px-5 text-[16px] font-medium text-ice">
                   <NoteIcon size={18} color={ICE} />Open playlist
                 </a>
               )}

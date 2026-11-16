@@ -8,6 +8,7 @@ import { useLayout } from "@/lib/useLayout";
 import TargetsChart from "./TargetsChart";
 import KcalField from "./KcalField";
 import { PRESETS } from "@/lib/presets";
+import { isCuratedId } from "@/lib/curatedIds";
 import { totals, type RideLog } from "@/lib/history";
 import { fmtClock } from "@/lib/format";
 import type { Workout } from "@/lib/types";
@@ -43,7 +44,7 @@ export default function HistoryView() {
 
   const t = useMemo(() => totals(logs), [logs]);
   const sel = logs.find((l) => l.id === selected);
-  const rideExists = (id: string) => PRESETS.some((p) => p.id === id) || rides.some((r) => r.id === id);
+  const rideExists = (id: string) => PRESETS.some((p) => p.id === id) || isCuratedId(id) || rides.some((r) => r.id === id);
 
   async function saveKcal(log: RideLog, kcal: number | null) {
     const res = await fetch(`/api/history/${log.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kcal }) });

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { loadRide } from "@/lib/client";
+import { trackEvent } from "@/lib/events";
 import type { Ride } from "@/lib/engine";
 import RidePlayer from "./RidePlayer";
 
@@ -8,7 +9,7 @@ export default function RideLoader({ id }: { id: string }) {
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    loadRide(id).then(setRide).catch((e: Error) => setError(e.message));
+    loadRide(id).then((r) => { setRide(r); trackEvent(id, "opened"); }).catch((e: Error) => setError(e.message));
   }, [id]);
 
   if (ride) return <RidePlayer ride={ride} />;

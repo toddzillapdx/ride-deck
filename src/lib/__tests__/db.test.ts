@@ -205,17 +205,19 @@ describe("history rows", () => {
 describe("settings", () => {
   it("defaults to nothing hidden and saves with one upsert", async () => {
     const db = fake();
-    expect(await getSettings(db.asClient())).toEqual({ hiddenPresets: [] });
-    await putSettings({ hiddenPresets: ["preset-a"] }, db.asClient());
-    await putSettings({ hiddenPresets: ["preset-a", "preset-b"] }, db.asClient());
+    expect(await getSettings(db.asClient())).toEqual({ hiddenPresets: [], service: null });
+    await putSettings({ hiddenPresets: ["preset-a"], service: null }, db.asClient());
+    await putSettings({ hiddenPresets: ["preset-a", "preset-b"], service: "spotify" }, db.asClient());
     expect(db.table("app_settings")).toHaveLength(1);
-    expect(await getSettings(db.asClient())).toEqual({ hiddenPresets: ["preset-a", "preset-b"] });
+    expect(await getSettings(db.asClient())).toEqual({ hiddenPresets: ["preset-a", "preset-b"], service: "spotify" });
     expect(db.calls.filter((c) => c === "upsert app_settings")).toHaveLength(2);
   });
   it("ignores junk", () => {
-    expect(parseSettings({ hiddenPresets: ["a", 3, null] })).toEqual({ hiddenPresets: ["a"] });
-    expect(parseSettings("not json")).toEqual({ hiddenPresets: [] });
-    expect(parseSettings(null)).toEqual({ hiddenPresets: [] });
+    expect(parseSettings({ hiddenPresets: ["a", 3, null] })).toEqual({ hiddenPresets: ["a"], service: null });
+    expect(parseSettings("not json")).toEqual({ hiddenPresets: [], service: null });
+    expect(parseSettings(null)).toEqual({ hiddenPresets: [], service: null });
+    expect(parseSettings({ service: "apple" }).service).toBe("apple");
+    expect(parseSettings({ service: "tidal" }).service).toBeNull();
   });
 });
 

@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAdmin } from "@/lib/useAdmin";
+import { isCuratedId } from "@/lib/curatedIds";
+import { trackEvent } from "@/lib/events";
 import Stage from "./Stage";
 import { fmtClock, fmtTarget } from "@/lib/format";
 import { loadRideEx } from "@/lib/client";
@@ -24,10 +26,22 @@ export default function RideDetails({ id }: { id: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [link, setLink] = useState("");
   const [savingLink, setSavingLink] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     loadRideEx(id).then((r) => { setRide(r.ride); setLink(r.ride.playlistUrl ?? ""); }).catch((e: Error) => setError(e.message));
   }, [id]);
+
+  /** Admin: copies this ride into a new draft in Published rides, where the playlists are added and it goes live. */
+  async function publish() {
+    setPublishing(true); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/curated", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rideId: id }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Couldn't publish (${res.status})`);
+      window.location.href = `/admin/rides/${encodeURIComponent(body.id)}`;
+    } catch (e) { setMsg((e as Error).message); setPublishing(false); }
+  }
 
   /** Saves just the playlist link on this ride (an empty box removes it). Leaves the segments and songs alone. */
   async function saveLink() {
@@ -66,6 +80,7 @@ export default function RideDetails({ id }: { id: string }) {
   const songsOf = (i: number) => (ride.tracklist ?? []).filter((t) => t.segmentIndex === i);
   const warnings = validateRide(ride).filter((w) => w.code !== "song-duration-missing");
   const builtIn = isPresetId(id);
+  const published = isCuratedId(id);
   return (
     <Stage bg="#002A33">
       <div className="flex h-full flex-col gap-4 bg-ground text-ink" style={{ padding: "28px 56px" }}>
@@ -77,15 +92,17 @@ export default function RideDetails({ id }: { id: string }) {
           </div>
           <div className="flex flex-none items-center gap-3">
             <a href={`/ride/${id}`} className="flex h-[52px] items-center rounded-full border-2 border-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ice">Ride</a>
+            {admin === true && !builtIn && !published && <button onClick={publish} disabled={publishing} className="flex h-[52px] items-center rounded-full border-2 border-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ice disabled:opacity-50">{publishing ? "Working…" : "Publish as curated ride"}</button>}
+            {admin === true && published && <a href={`/admin/rides/${encodeURIComponent(id)}`} className="flex h-[52px] items-center rounded-full border-2 border-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ice">Manage</a>}
             {admin === true && <a href={`/builder/new?from=${encodeURIComponent(id)}`} className="flex h-[52px] items-center rounded-full bg-ice px-7 text-[15px] font-medium uppercase tracking-[.08em] text-ground">Duplicate to edit</a>}
           </div>
         </div>
-        {!builtIn && admin === false && ride.playlistUrl && isHttpUrl(ride.playlistUrl) && (
+        {!builtIn && (admin === false || published) && ride.playlistUrl && isHttpUrl(ride.playlistUrl) && (
           <div className="flex flex-none items-center gap-3">
-            <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 flex-none items-center rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice">Open playlist ↗</a>
+            <a href={ride.playlistUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent(id, "playlist_opened")} className="flex h-11 flex-none items-center rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice">Open playlist ↗</a>
           </div>
         )}
-        {!builtIn && admin === true && (
+        {!builtIn && !published && admin === true && (
           <div className="flex flex-none items-center gap-3">
             <span className="flex-none text-[14px] font-medium uppercase tracking-[.14em] text-mist">Playlist</span>
             <input value={link} onChange={(e) => setLink(e.target.value)} onPaste={(e) => pasteLink(e, setLink)} onBlur={() => setLink(extractUrl(link) || link.trim())}

@@ -64,7 +64,7 @@ class Query implements PromiseLike<Result> {
     } else if (this.op === "insert") {
       for (const p of [this.payload].flat() as Row[]) {
         const row: Row = { ...p };
-        if (this.name === "rides" || this.name === "ride_logs") row.id ??= this.db.nextId();
+        if (this.name === "rides" || this.name === "ride_logs" || this.name === "curated_rides") row.id ??= this.db.nextId();
         rows.push(row); out.push({ ...row });
       }
     } else if (this.op === "upsert") {
