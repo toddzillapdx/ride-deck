@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createCuratedDraft, failResponse, getCuratedRaw, getRideRaw, isCuratedId, listCurated, requireAdmin } from "@/lib/db";
+import { createCuratedDraft, failResponse, getCuratedRaw, getCuratedSummary, getRideRaw, isCuratedId, listCurated, requireAdmin } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     const { client } = await requireAdmin();
     const raw = copyOf ? await getCuratedRaw(copyOf, null, client, true) : await getRideRaw(rideId!, client);
     if (copyOf) (raw as { name?: string }).name = `${String(raw.name ?? "Ride")} (new version)`;
-    return NextResponse.json(await createCuratedDraft(raw, client), { status: 201 });
+    const links = copyOf ? (await getCuratedSummary(copyOf, client)).links : {};
+    return NextResponse.json(await createCuratedDraft(raw, client, links), { status: 201 });
   } catch (e) { return failResponse(e); }
 }

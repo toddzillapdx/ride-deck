@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDb } from "../db/__tests__/fakeDb";
 import { PRESETS } from "../presets";
 import { PRESETS_V2 } from "../presetsV2";
-import { isCuratedId, curatedId } from "../db/curated";
+import { isCuratedId, curatedId, curatedUuid as curatedUuidOf } from "../db/curated";
 import { ACTIVE_SERVICES, SERVICES, isHttpsUrl, linkWarning, missingServices, serviceOfUrl } from "../services";
 
 // ---- stand-ins: accounts on, a pretend signed-in person, a pretend admin answer, an in-memory database ----------------------
@@ -166,18 +166,45 @@ describe("admin management", () => {
     expect(st.fake.table("curated_rides")).toHaveLength(1);
     expect((await call("admin/curated/[id]", "GET", undefined, { id: "not-an-id" })).status).toBe(404);
   });
-  it("turning a saved ride into a draft copies it and strips the id and the old playlist link", async () => {
+  it("turning a saved ride into a draft copies it and strips the id", async () => {
     st.admin = true;
-    st.fake.seed("rides", [{ id: "99999999-9999-4999-8999-999999999999", name: "My ride", playlist_url: "https://old.example/p", workout: { ...storedRide, name: "My ride" }, total_seconds: 600 }]);
+    st.fake.seed("rides", [{ id: "99999999-9999-4999-8999-999999999999", name: "My ride", playlist_url: null, workout: { ...storedRide, name: "My ride" }, total_seconds: 600 }]);
     const res = await call("admin/curated", "POST", { rideId: "99999999-9999-4999-8999-999999999999" });
     expect(res.status).toBe(201);
     const made = await res.json();
     expect(isCuratedId(made.id)).toBe(true);
-    expect(made).toMatchObject({ title: "My ride", status: "draft" });
+    expect(made).toMatchObject({ title: "My ride", status: "draft", links: {} });
     const stored = st.fake.table("curated_rides").find((r) => r.title === "My ride")!;
-    expect(stored.status ?? "draft").toBe("draft");
-    expect(JSON.stringify(stored.ride)).not.toMatch(/old\.example|"id"/);
+    expect(JSON.stringify(stored.ride)).not.toMatch(/"id"|playlistUrl/);
     expect((await call("admin/curated", "POST", { rideId: LIVE })).status).toBe(400);
+  });
+  it("the playlist link saved on a ride comes across, filed under the service it belongs to", async () => {
+    st.admin = true;
+    const make = async (url: string | null) => {
+      st.fake.seed("rides", [{ id: "99999999-9999-4999-8999-999999999999", name: "Linked", playlist_url: url, workout: { ...storedRide, name: "Linked" }, total_seconds: 600 }]);
+      const made = await (await call("admin/curated", "POST", { rideId: "99999999-9999-4999-8999-999999999999" })).json();
+      st.fake.tables.set("rides", []);
+      return made;
+    };
+    expect((await make(URLS.amazon)).links).toEqual({ amazon: URLS.amazon });
+    expect((await make(URLS.spotify)).links).toEqual({ spotify: URLS.spotify });
+    expect((await make(URLS.apple)).links).toEqual({ apple: URLS.apple }); // kept even though Apple is switched off
+    expect((await make("https://example.com/some-playlist")).links).toEqual({}); // not a known service: pasted by hand in the editor
+    expect((await make(null)).links).toEqual({});
+    const made = await make(URLS.amazon);
+    expect(made.missing).toEqual(["spotify"]); // Spotify is still needed to publish
+    expect(st.fake.table("curated_playlists").filter((p) => p.ride_id === curatedUuidOf(made.id) && p.service === "amazon")).toHaveLength(1);
+  });
+  it("a new version of a published ride starts with its links", async () => {
+    st.admin = true;
+    const res = await call("admin/curated", "POST", { copyOf: LIVE });
+    expect(res.status).toBe(201);
+    const made = await res.json();
+    expect(made).toMatchObject({ title: "Hills and Hooks (new version)", status: "draft", links: URLS, missing: [] });
+    expect(made.id).not.toBe(LIVE);
+  });
+  it("riders cannot make a draft from a published ride either", async () => {
+    expect((await call("admin/curated", "POST", { copyOf: LIVE })).status).toBe(403);
   });
 });
 

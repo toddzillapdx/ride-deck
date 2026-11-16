@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readRide, rideDuration, type Ride } from "../engine";
 import type { Workout } from "../types";
-import { ACTIVE_SERVICES, SERVICES, SERVICE_LABEL, isHttpsUrl, missingServices, type Service } from "../services";
+import { ACTIVE_SERVICES, SERVICES, SERVICE_LABEL, isHttpsUrl, missingServices, serviceOfUrl, type Service } from "../services";
 import { NotFound, RuleBroken, db, must } from "./client";
 import { rowToRaw, rowToWorkout, type RideRow } from "./rides";
 
@@ -114,11 +114,27 @@ function stripForStorage(ride: Ride): Record<string, unknown> {
   return rest;
 }
 
-/** Copies a saved ride into a new draft. The copy is a snapshot: later edits to the original do not change it. */
-export async function createCuratedDraft(rideJson: unknown, c: Client = db()): Promise<CuratedSummary> {
+/**
+ * Copies a ride into a new draft. The copy is a snapshot: later edits to the original do not change it.
+ * Playlist links come along so they do not have to be pasted again:
+ *  - from a saved ride, its one playlist link is filed under the service it belongs to (by the link's address; a link that is none
+ *    of the known services is left out, and the admin pastes it in the editor)
+ *  - from a published ride (a new version), all of its links are copied (`links`).
+ */
+export async function createCuratedDraft(rideJson: unknown, c: Client = db(), links: Links = {}): Promise<CuratedSummary> {
   const ride = readRide(rideJson).ride;
   const row = run(await c.from("curated_rides").insert({ title: ride.name, ride: stripForStorage(ride), total_seconds: Math.round(rideDuration(ride)), status: "draft" }).select("*").single()) as CuratedRow;
-  return summary(row, {});
+  const carry: Links = { ...links };
+  const own = ride.playlistUrl?.trim();
+  if (own && isHttpsUrl(own)) { const s = serviceOfUrl(own); if (s && !carry[s]) carry[s] = own; }
+  const added: Links = {};
+  for (const service of SERVICES) {
+    const url = carry[service];
+    if (!url || !isHttpsUrl(url)) continue;
+    const res = await c.from("curated_playlists").insert({ ride_id: row.id, service, url });
+    if (!res.error) added[service] = url; // a link that cannot be saved never blocks making the draft
+  }
+  return summary(row, added);
 }
 
 export interface CuratedPatch { title?: string; blurb?: string | null; month?: string | null; status?: CuratedStatus }
