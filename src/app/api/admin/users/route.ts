@@ -4,7 +4,7 @@ import { db, failResponse, parseAction, performAction, requireAdmin } from "@/li
 export const dynamic = "force-dynamic";
 
 /**
- * Admin: one action on the invite list or a rider: add or approve an invite, decline, exempt from limits, remove, send the invitation email,
+ * Admin: one action on the invite list or a rider: add or approve an invite, decline, remove, send the invitation email,
  * disable or enable a rider. Body: { action, ... }. Answers { message, email? }.
  */
 export async function POST(req: Request) {
