@@ -31,7 +31,7 @@ export default function AdminConsole() {
   const [ask, setAsk] = useState<{ title: string; body: string; label: string; run: () => void } | null>(null);
   const [notify, setNotify] = useState(true);
   const [handled, setHandled] = useState(false);
-  const [add, setAdd] = useState({ email: "", note: "", exempt: false });
+  const [add, setAdd] = useState({ email: "", note: "" });
 
   const load = useCallback(async () => {
     try {
@@ -116,8 +116,7 @@ export default function AdminConsole() {
               <input className={field} type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="their email" value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} />
               {typo && <button onClick={() => setAdd({ ...add, email: typo })} className="self-start text-left text-[14px] text-ice underline underline-offset-4">Did you mean {typo}?</button>}
               <input className={field} placeholder="a note for yourself (optional)" value={add.note} maxLength={300} onChange={(e) => setAdd({ ...add, note: e.target.value })} />
-              <label className="flex items-center gap-3 text-[14px] text-ink"><input type="checkbox" className="h-5 w-5" checked={add.exempt} onChange={(e) => setAdd({ ...add, exempt: e.target.checked })} />No weekly planner limit</label>
-              <button disabled={!add.email.trim() || busy !== null} className={solid} onClick={() => act("add", { action: "add_invite", email: add.email, note: add.note, exempt: add.exempt, notify }, () => setAdd({ email: "", note: "", exempt: false }))}>{busy === "add" ? "Working…" : notify ? "Invite and email them" : "Invite"}</button>
+              <button disabled={!add.email.trim() || busy !== null} className={solid} onClick={() => act("add", { action: "add_invite", email: add.email, note: add.note, notify }, () => setAdd({ email: "", note: "" }))}>{busy === "add" ? "Working…" : notify ? "Invite and email them" : "Invite"}</button>
             </div>
             <label className="flex items-center gap-3 text-[14px] text-ink"><input type="checkbox" className="h-5 w-5" checked={notify} onChange={(e) => setNotify(e.target.checked)} />Email the invitation when I approve or invite {data.emailConfigured ? "" : "(you'll send it from your mail app)"}</label>
 
@@ -156,7 +155,7 @@ export default function AdminConsole() {
               <div key={i.email} className="flex flex-col gap-2 rounded-[16px] border-2 border-line bg-tile px-4 py-3">
                 <span className="break-all text-[16px] text-ink">{i.email}</span>
                 {i.suggestion && <span className="text-[14px] text-ice">Looks like a typo. Did you mean {i.suggestion}? Remove this one and invite the right address.</span>}
-                <span className="text-[14px] font-light text-mist">Invited {ago(i.createdAt)}{i.note ? ` · ${i.note}` : ""}{i.exempt ? " · no planner limit" : ""}</span>
+                <span className="text-[14px] font-light text-mist">Invited {ago(i.createdAt)}{i.note ? ` · ${i.note}` : ""}</span>
                 <div className="flex flex-wrap gap-2">
                   <button disabled={busy !== null} className={solid} onClick={() => act(`s-${i.email}`, { action: "send_invite_email", email: i.email })}>{busy === `s-${i.email}` ? "Working…" : "Send email"}</button>
                   <button disabled={busy !== null} className={ghost} onClick={() => setAsk({ title: `Remove ${i.email}?`, body: "They'll no longer be able to sign up. You can invite them again later.", label: "Remove", run: () => act(`x-${i.email}`, { action: "remove_invite", email: i.email }) })}>Remove</button>
@@ -170,7 +169,6 @@ export default function AdminConsole() {
           <div className="flex flex-col gap-2">
             {data.ridersTruncated && <p className="m-0 text-[14px] text-ice">Showing the first 1,000 accounts.</p>}
             {data.riders.map((r) => <RiderCard key={r.id} r={r} busy={busy}
-              onExempt={() => act(`e-${r.id}`, { action: "set_exempt", email: r.email, exempt: !r.exempt })}
               onToggle={() => r.disabled ? act(`t-${r.id}`, { action: "enable_rider", userId: r.id })
                 : setAsk({ title: `Disable ${r.email}?`, body: "They won't be able to sign in until you enable them again. Their rides and history are kept.", label: "Disable", run: () => act(`t-${r.id}`, { action: "disable_rider", userId: r.id }) })} />)}
           </div>
@@ -193,7 +191,7 @@ export default function AdminConsole() {
   );
 }
 
-function RiderCard({ r, busy, onExempt, onToggle }: { r: ConsoleRider; busy: string | null; onExempt: () => void; onToggle: () => void }) {
+function RiderCard({ r, busy, onToggle }: { r: ConsoleRider; busy: string | null; onToggle: () => void }) {
   const state = r.disabled ? "Disabled" : isActiveRider(r) ? "Active" : "Quiet";
   return (
     <div className="flex flex-col gap-2 rounded-[16px] border-2 border-line bg-tile px-4 py-3">
@@ -202,13 +200,12 @@ function RiderCard({ r, busy, onExempt, onToggle }: { r: ConsoleRider; busy: str
         <span className={`flex-none rounded-full px-3 py-[2px] text-[14px] font-medium ${state === "Active" ? "bg-ice text-ground" : state === "Disabled" ? "border-2 border-ice text-ice" : "border-2 border-line text-mist"}`}>{state}</span>
       </div>
       <span className="text-[14px] font-light text-mist">
-        Joined {ago(r.joinedAt)} · last ride {ago(r.lastRideAt)} · {r.rideCount} ride{r.rideCount === 1 ? "" : "s"} · {r.service ? SERVICE_LABEL[r.service] : "no service chosen"}{r.exempt ? " · no planner limit" : ""}
+        Joined {ago(r.joinedAt)} · last ride {ago(r.lastRideAt)} · {r.rideCount} ride{r.rideCount === 1 ? "" : "s"} · {r.service ? SERVICE_LABEL[r.service] : "no service chosen"}
       </span>
       {(r.isAdmin || r.isYou) && <span className="text-[14px] text-ice">{r.isAdmin ? "Admin" : ""}{r.isAdmin && r.isYou ? " · " : ""}{r.isYou ? "You" : ""}</span>}
       {!r.isAdmin && !r.isYou && (
         <div className="flex flex-wrap gap-2">
           <button disabled={busy !== null} className={r.disabled ? solid : ghost} onClick={onToggle}>{r.disabled ? "Enable" : "Disable"}</button>
-          <button disabled={busy !== null} className={ghost} onClick={onExempt}>{r.exempt ? "Put the planner limit back" : "Remove the planner limit"}</button>
         </div>
       )}
     </div>

@@ -39,12 +39,11 @@ export async function loadConsole(me: { email: string | null; userId: string | n
   }));
   const inviteList = (must(invRows) ?? []) as Row[];
   const adminEmails = new Set(((must(adminRows) ?? []) as Row[]).map((r) => String(r.email).toLowerCase()));
-  const exemptOf = new Map(inviteList.map((r) => [String(r.email).toLowerCase(), r.exempt === true]));
   const accountEmails = new Set(users.map((u) => (u.email ?? "").toLowerCase()));
 
   // invited, but no account yet: they have not signed in
   const invites: ConsoleInvite[] = inviteList.filter((r) => !accountEmails.has(String(r.email).toLowerCase())).map((r) => ({
-    email: String(r.email), note: str(r.note), exempt: r.exempt === true, createdAt: str(r.created_at) ?? "", suggestion: suggestEmail(String(r.email)),
+    email: String(r.email), note: str(r.note), createdAt: str(r.created_at) ?? "", suggestion: suggestEmail(String(r.email)),
   }));
 
   const rides = new Map<string, { n: number; last: string | null }>();
@@ -65,7 +64,7 @@ export async function loadConsole(me: { email: string | null; userId: string | n
     const ride = rides.get(u.id);
     return {
       id: u.id, email: u.email ?? "(no email)", joinedAt: u.created_at ?? "", lastSignInAt: u.last_sign_in_at ?? null, lastRideAt: ride?.last ?? null, rideCount: ride?.n ?? 0,
-      service: (serviceOf.get(u.id) as ConsoleRider["service"]) ?? null, exempt: exemptOf.get(email) ?? false,
+      service: (serviceOf.get(u.id) as ConsoleRider["service"]) ?? null,
       disabled: !!u.banned_until && Date.parse(u.banned_until) > now, isAdmin: adminEmails.has(email), isYou: u.id === me.userId,
     };
   }).sort((a, b) => (b.lastRideAt ?? b.lastSignInAt ?? b.joinedAt).localeCompare(a.lastRideAt ?? a.lastSignInAt ?? a.joinedAt));
@@ -79,17 +78,16 @@ const safeJson = (s: string) => { try { return JSON.parse(s); } catch { return n
 // ---- actions -----------------------------------------------------------------------------------------------------------
 
 export type AdminAction =
-  | { action: "add_invite"; email: string; note?: string; exempt?: boolean; notify?: boolean }
-  | { action: "approve_request"; email: string; exempt?: boolean; notify?: boolean }
+  | { action: "add_invite"; email: string; note?: string; notify?: boolean }
+  | { action: "approve_request"; email: string; notify?: boolean }
   | { action: "decline_request"; email: string }
   | { action: "reopen_request"; email: string }
-  | { action: "set_exempt"; email: string; exempt: boolean }
   | { action: "remove_invite"; email: string }
   | { action: "send_invite_email"; email: string }
   | { action: "disable_rider"; userId: string }
   | { action: "enable_rider"; userId: string };
 
-const ACTIONS = ["add_invite", "approve_request", "decline_request", "reopen_request", "set_exempt", "remove_invite", "send_invite_email", "disable_rider", "enable_rider"];
+const ACTIONS = ["add_invite", "approve_request", "decline_request", "reopen_request", "remove_invite", "send_invite_email", "disable_rider", "enable_rider"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Turns what the browser sent into a checked action, or says plainly what is wrong with it. */
@@ -105,9 +103,8 @@ export function parseAction(body: unknown): AdminAction {
   if (!isPlausibleEmail(email)) throw new RuleBroken("That does not look like an email address.");
   const bool = (v: unknown) => v === true;
   switch (action) {
-    case "add_invite": return { action, email, note: typeof b.note === "string" ? b.note.replace(/\s+/g, " ").trim().slice(0, 300) : undefined, exempt: bool(b.exempt), notify: bool(b.notify) };
-    case "approve_request": return { action, email, exempt: bool(b.exempt), notify: bool(b.notify) };
-    case "set_exempt": return { action, email, exempt: bool(b.exempt) };
+    case "add_invite": return { action, email, note: typeof b.note === "string" ? b.note.replace(/\s+/g, " ").trim().slice(0, 300) : undefined, notify: bool(b.notify) };
+    case "approve_request": return { action, email, notify: bool(b.notify) };
     default: return { action, email } as AdminAction;
   }
 }
@@ -139,9 +136,9 @@ export async function performAction(a: AdminAction, by: Actor, c: Client = db(),
   switch (a.action) {
     case "add_invite": {
       const have = must(await c.from("invites").select("email").eq("email", a.email).maybeSingle()) as Row | null;
-      if (!have) must(await c.from("invites").insert({ email: a.email, note: a.note || "added by admin", exempt: a.exempt === true }));
+      if (!have) must(await c.from("invites").insert({ email: a.email, note: a.note || "added by admin" }));
       must(await c.from("invite_requests").update({ status: "invited" }).eq("email", a.email));
-      await log(c, by, have ? "invite (already invited)" : "invite", a.email, a.exempt ? "exempt from limits" : undefined);
+      await log(c, by, have ? "invite (already invited)" : "invite", a.email);
       const email = a.notify && !have ? await invitation(a.email, send) : undefined;
       return { message: have ? `${a.email} was already on the invite list.` : `${a.email} is invited.`, email };
     }
@@ -149,9 +146,9 @@ export async function performAction(a: AdminAction, by: Actor, c: Client = db(),
       const req = must(await c.from("invite_requests").select("email").eq("email", a.email).maybeSingle()) as Row | null;
       if (!req) throw new NotFound(`There is no request from ${a.email}.`);
       const have = must(await c.from("invites").select("email").eq("email", a.email).maybeSingle()) as Row | null;
-      if (!have) must(await c.from("invites").insert({ email: a.email, note: "approved", exempt: a.exempt === true }));
+      if (!have) must(await c.from("invites").insert({ email: a.email, note: "approved" }));
       must(await c.from("invite_requests").update({ status: "invited" }).eq("email", a.email));
-      await log(c, by, "approve", a.email, a.exempt ? "exempt from limits" : undefined);
+      await log(c, by, "approve", a.email);
       const email = a.notify ? await invitation(a.email, send) : undefined;
       return { message: `${a.email} is approved.`, email };
     }
@@ -162,12 +159,6 @@ export async function performAction(a: AdminAction, by: Actor, c: Client = db(),
       if (!rows.length) throw new NotFound(`There is no request from ${a.email}.`);
       await log(c, by, a.action === "decline_request" ? "decline" : "reopen", a.email);
       return { message: a.action === "decline_request" ? `${a.email} was declined.` : `${a.email} is back in the new requests.` };
-    }
-    case "set_exempt": {
-      const rows = (must(await c.from("invites").update({ exempt: a.exempt }).eq("email", a.email).select("email")) ?? []) as Row[];
-      if (!rows.length) throw new NotFound(`${a.email} is not on the invite list.`);
-      await log(c, by, a.exempt ? "exempt on" : "exempt off", a.email);
-      return { message: a.exempt ? `${a.email} has no weekly planner limit.` : `${a.email} has the normal weekly planner limit.` };
     }
     case "remove_invite": {
       if (await isAdminEmail(c, a.email)) throw new RuleBroken("That is an admin account. It cannot be removed here.");

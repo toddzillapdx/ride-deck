@@ -64,7 +64,7 @@ Deploy order (do these in order): 1) run `0006_published_rides.sql` in the SQL e
 Playlists are added in the app: open a saved ride's details, tap **Publish as curated ride**, paste the links on the page that opens, and tap Publish.
 
 ## The admin console (0007)
-`/admin` (admin only) replaces most work in the Supabase dashboard: new invite requests (approve or decline), inviting someone directly, people invited who have not signed in yet (resend the email, remove), riders (status, last ride, ride count, music service, disable or enable, remove or restore the weekly planner limit) and a log of what you did. It reads and writes with the service key, only after checking the caller is an admin.
+`/admin` (admin only) replaces most work in the Supabase dashboard: new invite requests (approve or decline), inviting someone directly, people invited who have not signed in yet (resend the email, remove), riders (status, last ride, ride count, music service, disable or enable) and a log of what you did. It reads and writes with the service key, only after checking the caller is an admin.
 
 Run `0007_admin_log.sql` before deploying the code. Nothing else needs a migration.
 

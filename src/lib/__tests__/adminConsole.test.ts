@@ -66,7 +66,7 @@ describe("only the admin gets in", () => {
     st.admin = false;
     const before = JSON.stringify([...st.fake.tables.entries()]);
     expect((await consoleGet()).status).toBe(403);
-    for (const body of [{ action: "add_invite", email: "x@example.com" }, { action: "approve_request", email: "new1@example.com" }, { action: "remove_invite", email: "waiting@gmal.com" }, { action: "disable_rider", userId: R1 }, { action: "set_exempt", email: "rider1@example.com", exempt: true }, { action: "send_invite_email", email: "waiting@gmal.com" }]) {
+    for (const body of [{ action: "add_invite", email: "x@example.com" }, { action: "approve_request", email: "new1@example.com" }, { action: "remove_invite", email: "waiting@gmal.com" }, { action: "disable_rider", userId: R1 }, { action: "send_invite_email", email: "waiting@gmal.com" }]) {
       expect((await post(body)).status).toBe(403);
     }
     expect(JSON.stringify([...st.fake.tables.entries()])).toBe(before);
@@ -86,9 +86,10 @@ describe("the console", () => {
     expect(body.invites.map((i: { email: string }) => i.email)).toEqual(["waiting@gmail.com".replace("gmail", "gmal")]); // only people with no account yet
     expect(body.invites[0].suggestion).toBe("waiting@gmail.com"); // typo help
     const by = (e: string) => body.riders.find((r: { email: string }) => r.email === e);
-    expect(by("rider1@example.com")).toMatchObject({ rideCount: 2, service: "spotify", exempt: false, disabled: false, isAdmin: false, isYou: false });
+    expect(by("rider1@example.com")).toMatchObject({ rideCount: 2, service: "spotify", disabled: false, isAdmin: false, isYou: false });
+    expect(by("rider1@example.com")).not.toHaveProperty("exempt"); // the weekly planner limit is not an admin-console concern: riders never plan songs
     expect(by("rider2@example.com")).toMatchObject({ disabled: true });
-    expect(by("boss@example.com")).toMatchObject({ isAdmin: true, isYou: true, exempt: true, rideCount: 1 });
+    expect(by("boss@example.com")).toMatchObject({ isAdmin: true, isYou: true, rideCount: 1 });
     expect(body.counts).toEqual({ newRequests: 1, waiting: 1, active: 2, disabled: 1 }); // boss + rider1 rode in the last 7 days; rider2 is disabled
     expect(body.emailConfigured).toBe(false);
   });
@@ -98,13 +99,8 @@ describe("approving and inviting", () => {
   it("approving a request adds them to the invite list, marks the request, and writes the log", async () => {
     const res = await post({ action: "approve_request", email: "New1@Example.com" });
     expect(res.status).toBe(200);
-    expect(table("invites").find((i) => i.email === "new1@example.com")).toMatchObject({ exempt: false });
     expect(table("invite_requests").find((r) => r.email === "new1@example.com")!.status).toBe("invited");
     expect(table("admin_log")).toMatchObject([{ admin_email: "boss@example.com", action: "approve", target: "new1@example.com" }]);
-  });
-  it("can approve without the weekly planner limit", async () => {
-    await post({ action: "approve_request", email: "new1@example.com", exempt: true });
-    expect(table("invites").find((i) => i.email === "new1@example.com")!.exempt).toBe(true);
   });
   it("approving a request that does not exist is a 404", async () => {
     expect((await post({ action: "approve_request", email: "nobody@example.com" })).status).toBe(404);
@@ -129,13 +125,6 @@ describe("approving and inviting", () => {
     await post({ action: "reopen_request", email: "new1@example.com" });
     expect(table("invite_requests").find((r) => r.email === "new1@example.com")!.status).toBe("new");
     expect((await post({ action: "decline_request", email: "nobody@example.com" })).status).toBe(404);
-  });
-  it("exempt can be switched on and off; for someone not invited it is a 404", async () => {
-    await post({ action: "set_exempt", email: "rider1@example.com", exempt: true });
-    expect(table("invites").find((i) => i.email === "rider1@example.com")!.exempt).toBe(true);
-    await post({ action: "set_exempt", email: "rider1@example.com", exempt: false });
-    expect(table("invites").find((i) => i.email === "rider1@example.com")!.exempt).toBe(false);
-    expect((await post({ action: "set_exempt", email: "nobody@example.com", exempt: true })).status).toBe(404);
   });
 });
 

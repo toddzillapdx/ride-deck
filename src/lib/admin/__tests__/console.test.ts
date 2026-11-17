@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { countsOf, inviteMailto, inviteMessage, isActiveRider, suggestEmail, type ConsoleRider } from "../console";
 
 const NOW = Date.parse("2026-11-20T12:00:00Z");
-const rider = (o: Partial<ConsoleRider>): ConsoleRider => ({ id: "u", email: "a@example.com", joinedAt: "2026-11-01T00:00:00Z", lastSignInAt: null, lastRideAt: null, rideCount: 0, service: null, exempt: false, disabled: false, isAdmin: false, isYou: false, ...o });
+const rider = (o: Partial<ConsoleRider>): ConsoleRider => ({ id: "u", email: "a@example.com", joinedAt: "2026-11-01T00:00:00Z", lastSignInAt: null, lastRideAt: null, rideCount: 0, service: null, disabled: false, isAdmin: false, isYou: false, ...o });
 
 describe("who counts as active", () => {
   it("rode or signed in within the last 7 days, and is not disabled", () => {
@@ -15,7 +15,7 @@ describe("who counts as active", () => {
   it("counts requests, waiting invites, active and disabled riders", () => {
     const c = countsOf(
       [{ email: "a@x.co", note: null, status: "new", createdAt: "", suggestion: null }, { email: "b@x.co", note: null, status: "declined", createdAt: "", suggestion: null }],
-      [{ email: "c@x.co", note: null, exempt: false, createdAt: "", suggestion: null }],
+      [{ email: "c@x.co", note: null, createdAt: "", suggestion: null }],
       [rider({ lastRideAt: "2026-11-19T00:00:00Z" }), rider({ disabled: true }), rider({})], NOW);
     expect(c).toEqual({ newRequests: 1, waiting: 1, active: 1, disabled: 1 });
   });

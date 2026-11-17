@@ -6,10 +6,10 @@ import type { Service } from "../services";
 export type RequestStatus = "new" | "invited" | "declined";
 export interface ConsoleRequest { email: string; note: string | null; status: RequestStatus; createdAt: string; suggestion: string | null }
 /** On the invite list but no account yet (they have not signed in). */
-export interface ConsoleInvite { email: string; note: string | null; exempt: boolean; createdAt: string; suggestion: string | null }
+export interface ConsoleInvite { email: string; note: string | null; createdAt: string; suggestion: string | null }
 export interface ConsoleRider {
   id: string; email: string; joinedAt: string; lastSignInAt: string | null; lastRideAt: string | null; rideCount: number;
-  service: Service | null; exempt: boolean; disabled: boolean; isAdmin: boolean; isYou: boolean;
+  service: Service | null; disabled: boolean; isAdmin: boolean; isYou: boolean;
 }
 export interface ConsoleLogEntry { at: string; admin: string; action: string; target: string; detail: string | null }
 export interface ConsoleData {
