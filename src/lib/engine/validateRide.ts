@@ -1,4 +1,5 @@
 import { hillLevels, rideDuration } from "./buildPhases";
+import { intervalKindProblem } from "./intervalKind";
 import { MIN_FINAL_REST_SEC, type Ride, type Warning } from "./types";
 
 /** Soft checks. Warnings never block saving or riding. */
@@ -10,6 +11,9 @@ export function validateRide(ride: Ride): Warning[] {
       if (!ok) w.push({ code: "ratio-mismatch", segmentIndex: i, message: `${s.name}: ${s.workSec}s on / ${s.restSec}s off is not ${s.ratio}.` });
       const fin = s.restSec + (s.finalRestAdjustSec ?? 0);
       if (fin < MIN_FINAL_REST_SEC) w.push({ code: "final-rest-short", segmentIndex: i, message: `${s.name}: the last rest is only ${fin}s (minimum ${MIN_FINAL_REST_SEC}s).` });
+      const [cLo, cHi] = Array.isArray(s.work.cadence) ? s.work.cadence : [s.work.cadence, s.work.cadence];
+      const kind = intervalKindProblem(s.workKind, s.name, cLo, cHi);
+      if (kind) w.push({ code: "interval-kind-mismatch", segmentIndex: i, message: kind.message });
     } else if (s.type === "hill" && hillLevels(s) === 1) {
       w.push({ code: "hill-single-level", segmentIndex: i, message: `${s.name}: effort ${s.effortFrom} to ${s.effortTo} has one level, so it rides as a flat stretch.` });
     }

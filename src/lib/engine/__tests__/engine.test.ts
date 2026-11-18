@@ -124,8 +124,8 @@ describe("validateRide", () => {
   it("warns on ratio mismatch, short final rest, single-level hill, songs shorter than segments", () => {
     const r: Ride = {
       ...ride([
-        { type: "interval", name: "A", workKind: "sprint", ratio: "1:1", workSec: 40, restSec: 20, rounds: 2, work: cue, rest: cue, cue: "" },
-        { type: "interval", name: "B", workKind: "sprint", ratio: "2:1", workSec: 40, restSec: 20, rounds: 2, finalRestAdjustSec: -18, work: cue, rest: cue, cue: "" },
+        { type: "interval", name: "A", workKind: "sprint", ratio: "1:1", workSec: 40, restSec: 20, rounds: 2, work: { cadence: [110, 120], effort: [4, 6] }, rest: cue, cue: "" },
+        { type: "interval", name: "B", workKind: "sprint", ratio: "2:1", workSec: 40, restSec: 20, rounds: 2, finalRestAdjustSec: -18, work: { cadence: [110, 120], effort: [4, 6] }, rest: cue, cue: "" },
         { type: "hill", name: "H", durationSec: 60, cadence: 65, effortFrom: 5, effortTo: 5, cue: "" },
       ]),
       tracklist: [{ segmentIndex: 0, title: "a", artist: "b", durationSec: 60 }],
@@ -137,7 +137,7 @@ describe("validateRide", () => {
     expect(validateRide(r).map((w) => w.code)).toEqual(["song-duration-missing"]);
   });
   it("clean ride has none", () => {
-    expect(validateRide(ride([{ type: "interval", name: "A", workKind: "sprint", ratio: "2:1", workSec: 40, restSec: 20, rounds: 4, work: cue, rest: cue, cue: "" }]))).toEqual([]);
+    expect(validateRide(ride([{ type: "interval", name: "A", workKind: "sprint", ratio: "2:1", workSec: 40, restSec: 20, rounds: 4, work: { cadence: [110, 120], effort: [4, 6] }, rest: cue, cue: "" }]))).toEqual([]);
   });
 });
 
@@ -293,11 +293,68 @@ describe("clock", () => {
   });
 });
 
-describe("sprint intervals are about fast legs, not heavy resistance", () => {
+describe("sprint intervals are about fast legs, resistance intervals are tough and heavy", () => {
   it("a converted v1 sprint block works at effort 4-6, and the sprint defaults are 4-6", async () => {
     const { newSeg, intervalDefaults } = await import("../../builderV2");
-    expect(intervalDefaults("sprint")).toMatchObject({ wEffMin: "4", wEffMax: "6" });
+    expect(intervalDefaults("sprint")).toMatchObject({ workKind: "sprint", name: "Sprint intervals", wCadMin: "110", wCadMax: "120", wEffMin: "4", wEffMax: "6" });
     expect(newSeg("interval")).toMatchObject({ workKind: "sprint", wEffMin: "4", wEffMax: "6" });
-    expect(intervalDefaults("resistance")).toMatchObject({ wEffMin: "8", wEffMax: "9" });
+  });
+  it("new resistance intervals are tough: effort 5-8 at cadence 70-80, wherever one is created", async () => {
+    const { intervalDefaults, newSeg, segmentFor, TEMPLATES } = await import("../../builderV2");
+    const want = { workKind: "resistance", name: "Resistance intervals", wCadMin: "70", wCadMax: "80", wEffMin: "5", wEffMax: "8" };
+    expect(intervalDefaults("resistance")).toMatchObject(want);                                 // the Sprint/Resistance switch
+    expect(segmentFor({ kind: "interval", work: "resistance" })).toMatchObject(want);          // suggested from a song's intensity
+    expect(newSeg("interval", intervalDefaults("resistance"))).toMatchObject(want);
+    expect(TEMPLATES.find((t) => /Intervals 1:1/.test(t.label))!.make()).toMatchObject(want);   // the template
+    const { PRESETS_V2 } = await import("../../presetsV2");
+    const starter = PRESETS_V2.flatMap((r) => r.segments).find((x) => x.type === "interval" && x.workKind === "resistance");
+    expect(starter).toMatchObject({ work: { cadence: [70, 80], effort: [5, 8] } });
+  });
+});
+
+describe("an interval's kind must agree with its name and numbers", () => {
+  const work = (cadence: [number, number]) => ({ cadence, effort: [5, 8] as [number, number] });
+  const iv = (name: string, workKind: "sprint" | "resistance", cadence: [number, number]) => ride([{ type: "interval", name, workKind, ratio: "1:1", workSec: 30, restSec: 30, rounds: 4, work: work(cadence), rest: cue, cue: "" }]);
+  const codes = (r: Ride) => validateRide(r).map((w) => w.code);
+
+  it("flags a heavy-sounding name on a sprint, the mix that put 'Sprint' over a resistance block", () => {
+    const w = validateRide(iv("Resistance intervals", "sprint", [55, 65]));
+    expect(w.map((x) => x.code)).toEqual(["interval-kind-mismatch"]);
+    expect(w[0].message).toMatch(/set up as Sprint intervals, but its name says Resistance/);
+  });
+  it("flags a sprint name on a resistance interval", () => {
+    expect(codes(iv("Sprint intervals", "resistance", [70, 80]))).toEqual(["interval-kind-mismatch"]);
+  });
+  it("flags a slow 'sprint' and a fast 'resistance' even when the name is neutral", () => {
+    expect(codes(iv("Intervals", "sprint", [55, 65]))).toEqual(["interval-kind-mismatch"]);
+    expect(codes(iv("Intervals", "resistance", [110, 120]))).toEqual(["interval-kind-mismatch"]);
+  });
+  it("says nothing when kind, name and cadence agree", () => {
+    expect(codes(iv("Sprint intervals", "sprint", [110, 120]))).toEqual([]);
+    expect(codes(iv("Resistance intervals", "resistance", [70, 80]))).toEqual([]);
+    expect(codes(iv("Heavy set", "resistance", [60, 70]))).toEqual([]);
+    expect(codes(iv("Intervals", "sprint", [90, 100]))).toEqual([]);
+  });
+  it("intervalKindProblem says what to change it to", async () => {
+    const { intervalKindProblem } = await import("../intervalKind");
+    expect(intervalKindProblem("sprint", "Resistance intervals", 55, 65)).toMatchObject({ fixTo: "resistance" });
+    expect(intervalKindProblem("resistance", "Sprint intervals", 70, 80)).toMatchObject({ fixTo: "sprint" });
+    expect(intervalKindProblem("sprint", "Intervals", 55, 65)).toMatchObject({ fixTo: "resistance" });
+    expect(intervalKindProblem("resistance", "Intervals", 110, 120)).toMatchObject({ fixTo: "sprint" });
+    expect(intervalKindProblem("sprint", "Sprint intervals", 110, 120)).toBeNull();
+    expect(intervalKindProblem("sprint", "x", NaN, NaN)).toBeNull(); // half-typed numbers say nothing
+  });
+});
+
+describe("converting an old (v1) block named for resistance", () => {
+  const v1 = (segments: V1Workout["segments"]): V1Workout => ({ name: "old", segments });
+  it("files a heavy sprint block as a resistance interval with tough effort, and a fast one as a sprint", () => {
+    const heavy = convertV1(v1([{ name: "Resistance intervals", type: "sprint", durationSec: 240, cadence: [55, 65], resistance: [70, 80] }]));
+    expect(heavy.ride.segments[0]).toMatchObject({ type: "interval", workKind: "resistance", work: { cadence: [55, 65], effort: [5, 8] } });
+    const slow = convertV1(v1([{ name: "Intervals", type: "sprint", durationSec: 240, cadence: [60, 70], resistance: [60, 70] }]));
+    expect(slow.ride.segments[0]).toMatchObject({ workKind: "resistance" });
+    const fast = convertV1(v1([{ name: "Sprint set", type: "sprint", durationSec: 240, cadence: [110, 120], resistance: [30, 40] }]));
+    expect(fast.ride.segments[0]).toMatchObject({ workKind: "sprint", work: { effort: [4, 6] } });
+    expect(validateRide(heavy.ride).map((w) => w.code)).not.toContain("interval-kind-mismatch");
   });
 });

@@ -102,7 +102,7 @@ export const RATIO_SECONDS: Record<IntervalRatio, [number, number]> = { "1:1": [
 export function intervalDefaults(kind: IntervalKind): Partial<SegDraft> {
   return kind === "sprint"
     ? { workKind: "sprint", name: "Sprint intervals", wCadMin: "110", wCadMax: "120", wEffMin: "4", wEffMax: "6", cue: "Fast legs. Recover between rounds." }
-    : { workKind: "resistance", name: "Resistance intervals", wCadMin: "55", wCadMax: "65", wEffMin: "8", wEffMax: "9", cue: "Heavy and strong, then easy." };
+    : { workKind: "resistance", name: "Resistance intervals", wCadMin: "70", wCadMax: "80", wEffMin: "5", wEffMax: "8", cue: "Heavy and strong, then easy." };
 }
 
 export interface Template { label: string; make: () => SegDraft }

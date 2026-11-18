@@ -118,6 +118,7 @@ export interface Warning {
     | "ratio-mismatch"
     | "final-rest-short"
     | "hill-single-level"
+    | "interval-kind-mismatch"
     | "songs-vs-segments"
     | "song-duration-missing";
   segmentIndex?: number;

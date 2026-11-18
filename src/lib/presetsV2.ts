@@ -43,7 +43,7 @@ export const PRESETS_V2: Ride[] = [
     warm(3),
     interval("Sprint intervals", "sprint", "2:1", 40, 20, 6, [[110, 120], [4, 6]], "Fast legs. Recover between rounds."),
     recover(120),
-    interval("Resistance intervals", "resistance", "1:1", 30, 30, 6, [[55, 65], [8, 9]], "Heavy and strong, then easy."),
+    interval("Resistance intervals", "resistance", "1:1", 30, 30, 6, [[70, 80], [5, 8]], "Heavy and strong, then easy."),
     cool(3),
   ]),
   r("preset-hill-repeats-30", "30 min · Hill repeats", [

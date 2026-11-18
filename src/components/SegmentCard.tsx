@@ -2,7 +2,7 @@
 import { fmtClock } from "@/lib/format";
 import { RATIO_SECONDS, intervalDefaults, newSeg, type SegDraft, type SegType, type SongDraft } from "@/lib/builderV2";
 import { COOLDOWN_SEC } from "@/lib/songFlow";
-import { hillCoolSec, type FlatRole, type IntervalKind, type IntervalRatio } from "@/lib/engine";
+import { hillCoolSec, intervalKindProblem, type FlatRole, type IntervalKind, type IntervalRatio } from "@/lib/engine";
 import { Choice, Num, Pair, field } from "./builderUi";
 
 /** One song and the segment it drives. The length is read-only: the song decides it. */
@@ -14,6 +14,8 @@ export default function SegmentCard({ s, i, song, startSec, lenSec, end, on, rep
   const changeType = (t: SegType) => on({ ...newSeg(t), key: s.key, songCount: "1" });
   const hillSteps = s.type === "hill" ? Math.abs(Number(s.effTo) - Number(s.effFrom)) + 1 : 0;
   const finalRest = (Number(s.restSec) || 0) + (Number(s.adjust) || 0);
+  /** The kind (Sprint or Resistance) is what the ride screen shows. If the name or the cadence says otherwise, say so and offer the fix. */
+  const kindProblem = s.type === "interval" ? intervalKindProblem(s.workKind, s.name, Number(s.wCadMin), Number(s.wCadMax)) : null;
   return (
     <div className="flex flex-col gap-3 rounded-[18px] border-2 border-line bg-tile p-4">
       <div className="flex items-start gap-3">
@@ -64,6 +66,12 @@ export default function SegmentCard({ s, i, song, startSec, lenSec, end, on, rep
             <Pair text="Cadence" a={s.wCadMin} b={s.wCadMax} on={(a, b) => on({ wCadMin: a, wCadMax: b })} />
             <Pair text="Effort" a={s.wEffMin} b={s.wEffMax} on={(a, b) => on({ wEffMin: a, wEffMax: b })} />
           </div>
+          {kindProblem && (
+            <div className="flex flex-wrap items-center gap-3 rounded-[12px] border-2 border-ice px-3 py-2" role="alert">
+              <span className="min-w-0 flex-1 text-[14px] leading-snug text-ice">⚠ {kindProblem.message}</span>
+              <button onClick={() => on(intervalDefaults(kindProblem.fixTo))} className="h-11 flex-none rounded-full bg-ice px-5 text-[14px] font-medium text-ground">Make it {kindProblem.fixTo === "resistance" ? "Resistance" : "Sprint"}</button>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-4">
             <span className="w-[52px] text-[14px] font-medium uppercase tracking-[.1em] text-mist">Rest</span>
             <Pair text="Cadence" a={s.rCadMin} b={s.rCadMax} on={(a, b) => on({ rCadMin: a, rCadMax: b })} />

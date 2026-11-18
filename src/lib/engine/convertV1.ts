@@ -43,6 +43,8 @@ const RAMP_MAX_RISE = 25;
 const SPRINT_FLOOR = 8;
 /** A sprint interval is about fast legs, not heavy resistance: effort 4 to 6. */
 const SPRINT_INTERVAL_EFFORT: Target = [4, 6];
+/** A heavy (resistance) interval: effort 5 to 8, as the builder's default. */
+const RESISTANCE_INTERVAL_EFFORT: Target = [5, 8];
 const SPRINT_CADENCE = 100;
 const REST_CUE = { cadence: [70, 80] as [number, number], effort: [2, 3] as [number, number] };
 
@@ -100,13 +102,16 @@ export function convertV1(w: V1Workout, opts: ConvertOptions = {}): Conversion {
       let adj = s.durationSec - rounds * cycle;
       if (restSec + adj < MIN_FINAL_REST_SEC && rounds > 1) { rounds -= 1; adj = s.durationSec - rounds * cycle; }
       const eff = effortOf(s.resistance, true);
+      // A v1 "sprint" block that is named for resistance, or that is slow, is a heavy interval. (Filing it as a sprint made the ride
+      // screen say "Sprint" over a heavy block.)
+      const heavy = /resist|heavy/i.test(s.name) || mid(cadence) < 90;
       out = {
-        type: "interval", name: s.name, workKind: "sprint", ratio, workSec, restSec, rounds,
+        type: "interval", name: s.name, workKind: heavy ? "resistance" : "sprint", ratio, workSec, restSec, rounds,
         ...(adj !== 0 ? { finalRestAdjustSec: adj } : {}),
-        work: { cadence, effort: SPRINT_INTERVAL_EFFORT },
+        work: { cadence, effort: heavy ? RESISTANCE_INTERVAL_EFFORT : SPRINT_INTERVAL_EFFORT },
         rest: REST_CUE, cue,
       };
-      flag(i, `sprint block became ${sprintMode} x ${rounds}; confirm the ratio and rounds`, f);
+      flag(i, `${heavy ? "heavy" : "sprint"} block became ${sprintMode} x ${rounds}; confirm the ratio and rounds`, f);
     } else {
       const sprintLike = s.type === "sprint" || mid(cadence) >= SPRINT_CADENCE;
       const effort = s.type === "sprint" ? collapse(8, 9) : effortOf(s.resistance, sprintLike);
