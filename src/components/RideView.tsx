@@ -127,16 +127,19 @@ export default function RideView({ v, landscape, onPause, onGuide, onMore }: {
         <Tile grow={1} label="Cadence" unit="RPM" color={ICE} chars={sharedChars} target={p.cadence} cap={cap} dark={onIce} foot={changeLine(prev?.cadence, p.cadence)} />
       </div>
 
-      {/* cue */}
-      <div className="flex items-center pt-2"><span className="min-w-0 truncate text-[17px] font-light">{seg.cue}</span></div>
+      {/* cue, and (landscape) the song that should be playing, across from it and above the Playlist and More buttons */}
+      <div className="flex items-center justify-between gap-4 pt-2">
+        <span className="min-w-0 flex-1 truncate text-[17px] font-light">{seg.cue}</span>
+        {landscape && now && <span className="min-w-0 max-w-[55%] flex-none truncate text-right text-[17px] font-normal leading-tight" style={{ color: MIST }}>♪ {now.title} · {now.artist}</span>}
+      </div>
 
-      {/* bottom: what is next, the current song, and the controls */}
+      {/* bottom: what is next, and the controls (portrait also has the current song here) */}
       <div className={`flex gap-2 pt-2 ${landscape ? "flex-row items-center" : "flex-col"}`}>
         {landscape && <PauseButton onClick={onPause} onIce={onIce} />}
-        {/* one line: what is next, then the song that should be playing. Same size and weight, different colors. */}
+        {/* one line: what is next (portrait: then the song that should be playing). Same size and weight, different colors. */}
         <div className="flex min-w-0 flex-1 items-baseline gap-3 text-[17px] font-normal leading-tight">
           <span className="flex-none uppercase tracking-[.04em]" style={{ color: ICE }}>Next {nextP ? nextWord(ride, p, nextP) : "FINISH"}</span>
-          {now && <span className="min-w-0 truncate" style={{ color: MIST }}>♪ {now.title} · {now.artist}</span>}
+          {!landscape && now && <span className="min-w-0 truncate" style={{ color: MIST }}>♪ {now.title} · {now.artist}</span>}
         </div>
         <div className={`flex flex-none gap-2 ${landscape ? "" : "w-full"}`}>
           {!landscape && <PauseButton onClick={onPause} grow onIce={onIce} />}
