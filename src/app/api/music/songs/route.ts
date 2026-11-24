@@ -44,6 +44,10 @@ export async function POST(req: Request) {
     const keep = Array.isArray(b.keep)
       ? (b.keep as Record<string, unknown>[]).slice(0, 60).filter((k) => typeof k?.title === "string" && typeof k?.artist === "string").map((k) => ({ title: String(k.title).slice(0, 120), artist: String(k.artist).slice(0, 120) }))
       : [];
+    const must = !(b.slot && typeof b.slot === "object") && Array.isArray(b.must)
+      ? (b.must as Record<string, unknown>[]).slice(0, 8).filter((k) => typeof k?.title === "string" && typeof k?.artist === "string" && String(k.title).trim() && String(k.artist).trim())
+          .map((k) => ({ title: String(k.title).trim().slice(0, 120), artist: String(k.artist).trim().slice(0, 120) }))
+      : [];
     let slot: SongPlanInput["slot"];
     if (b.slot && typeof b.slot === "object") {
       const s = b.slot as Record<string, unknown>;
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
       };
     } else if (count < 4 || count > 34) throw new Error("count must be from 4 to 34");
     const spares = Number.isInteger(b.spares) && (b.spares as number) >= 0 && (b.spares as number) <= 8 ? (b.spares as number) : 0;
-    input = { eras: labels(b.eras, 20), genres: labels(b.genres, 30), vibe, seeds, artistOnly, targetMin, count: slot ? 1 : count, spares: slot ? 0 : spares, avoid, keep, ...(slot ? { slot } : {}) };
+    input = { eras: labels(b.eras, 20), genres: labels(b.genres, 30), vibe, seeds, artistOnly, targetMin, count: slot ? 1 : count, spares: slot ? 0 : spares, avoid, keep, ...(must.length ? { must } : {}), ...(slot ? { slot } : {}) };
   } catch (e) {
     return bad(e instanceof SyntaxError ? "Body must be JSON" : (e as Error).message);
   }

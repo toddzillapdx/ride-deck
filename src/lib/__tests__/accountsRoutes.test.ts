@@ -59,6 +59,23 @@ describe("data routes with accounts on", () => {
   });
 });
 
+describe("must-include songs reach the planner", () => {
+  it("passes the typed songs through, tidied and capped, for a full plan", async () => {
+    await plan({ must: [{ artist: " Led Zeppelin ", title: "Bron-Yr-Aur" }, { artist: "", title: "no artist" }, { title: "no artist key" }, { artist: "Q", title: "S" }] });
+    expect(st.planner).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ must: [{ artist: "Led Zeppelin", title: "Bron-Yr-Aur" }, { artist: "Q", title: "S" }] }));
+    st.planner.mockClear();
+    await plan({ must: Array.from({ length: 12 }, (_, i) => ({ artist: `A${i}`, title: `T${i}` })) });
+    expect(st.planner.mock.calls[0][1].must).toHaveLength(8);
+  });
+  it("asks for nothing extra when there are none, and a one-song swap ignores them", async () => {
+    await plan();
+    expect(st.planner.mock.calls[0][1]).not.toHaveProperty("must");
+    st.planner.mockClear();
+    await plan({ slot: { index: 2, total: 9 }, count: undefined, must: [{ artist: "Q", title: "S" }] });
+    expect(st.planner.mock.calls[0][1]).not.toHaveProperty("must");
+  });
+});
+
 describe("the song planner with weekly limits", () => {
   it("needs a signed-in person, and does not ask for the old shared passcode", async () => {
     st.user = null;

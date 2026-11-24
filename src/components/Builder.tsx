@@ -12,6 +12,7 @@ import {
 import { rideDuration } from "@/lib/engine";
 import { styleForSave } from "@/lib/music";
 import { SPARES, checkSongs, nextAdjustment, rideTitle, soundtrackProblems, songsNeeded } from "@/lib/songFlow";
+import { ensureMusts, mustNote, parseMust } from "@/lib/mustInclude";
 import { NeedPasscode, applyResolved, passcode, planSongsApi, quotaLine, rememberApi, resolveApi, type PlanBody, type QuotaLine } from "@/lib/songClient";
 
 export type Tab = "music" | "plan";
@@ -21,7 +22,7 @@ const readDraft = (): RideDraft | null => {
   try {
     const raw = window.localStorage.getItem(DRAFT_KEY);
     const d = raw ? (JSON.parse(raw) as RideDraft) : null;
-    return d && Array.isArray(d.songs) && Array.isArray(d.segments) ? { ...d, bench: d.bench ?? [] } : null;
+    return d && Array.isArray(d.songs) && Array.isArray(d.segments) ? { ...d, bench: d.bench ?? [], must: typeof d.must === "string" ? d.must : "" } : null;
   } catch { return null; }
 };
 const writeDraft = (d: RideDraft | null) => { try { if (d) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); else window.localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } };
@@ -103,10 +104,18 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
     setMsg(null); setBusy("plan"); setUndo(null);
     try {
       const cur = ref.current;
-      const r = await planSongsApi({ ...styleBody(cur), count: songsNeeded(cur.targetMin) + SPARES, spares: SPARES, avoid: [...tried.current, ...heard].slice(0, 150), keep: [] });
+      // Songs typed in "Must include" have to end up on the list. Check the typing first, so nothing is spent on a line that cannot be read.
+      const typed = parseMust(cur.must);
+      if (typed.bad.length) { setMsg({ text: `Fix this in Must include (use "Artist - Song", separated by semicolons): ${typed.bad.join("; ")}` }); return; }
+      const mustKeys = new Set(typed.songs.map((m) => m.title.toLowerCase()));
+      const avoid = [...tried.current, ...heard].filter((t) => !mustKeys.has(t.toLowerCase())).slice(0, 150); // never tell the planner to avoid a song that must be on the list
+      const r = await planSongsApi({ ...styleBody(cur), count: songsNeeded(cur.targetMin) + SPARES, spares: SPARES, avoid, keep: [], ...(typed.songs.length ? { must: typed.songs } : {}) });
       setNeedPass(false);
-      if (!r.songs.length) { setMsg({ text: r.notes.join(" ") || "No songs came back. Try again." }); return; }
-      commit(setPlanned(ref.current, r.songs));
+      if (!r.songs.length && !typed.songs.length) { setMsg({ text: r.notes.join(" ") || "No songs came back. Try again." }); return; }
+      // The app does not trust the planner to follow "must include": it checks the list and adds any song that is missing.
+      const ensured = ensureMusts(r.songs, typed.songs);
+      if (ensured.added.length) r.notes.push(mustNote(ensured)); else if (ensured.found.length) r.notes.push(mustNote(ensured));
+      commit(setPlanned(ref.current, ensured.songs));
       setBusy("resolve");
       await resolveAll();
       const a = arrangeNow();

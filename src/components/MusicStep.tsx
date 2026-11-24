@@ -1,4 +1,5 @@
 "use client";
+import { parseMust } from "@/lib/mustInclude";
 import { useState } from "react";
 import { fmtClock } from "@/lib/format";
 import { extractUrl, isHttpUrl, pasteLink } from "@/lib/url";
@@ -20,6 +21,9 @@ export default function MusicStep(p: {
 }) {
   const { d, patch, check, busy } = p;
   const onlyArtist = d.artistOnly && !!d.seeds.trim();
+  const typedMust = parseMust(d.must);
+  const mustCount = typedMust.songs.length;
+  const mustBad = typedMust.bad.length ? typedMust.bad.map((l) => `"${l.length > 30 ? l.slice(0, 30) + "…" : l}"`).join(", ") : "";
   const working = busy !== null;
   const w = windowFor(d.targetMin);
   const customTarget = !(TARGET_CHOICES as readonly number[]).includes(d.targetMin);
@@ -66,7 +70,11 @@ export default function MusicStep(p: {
           <div className="flex min-w-0 flex-wrap gap-[6px]">{GENRES.map((o) => <button key={o} disabled={onlyArtist} aria-pressed={d.genres.includes(o)} onClick={() => patch({ genres: toggle(d.genres, o) })} className={chip(d.genres.includes(o))}>{o}</button>)}</div>
         </div>
         <div className="flex items-center gap-4">
-          <input value={d.seeds} onChange={(e) => patch({ seeds: e.target.value })} maxLength={300} spellCheck={false} placeholder="Sounds like: songs, artists, or a note (optional)" aria-label="Sounds like" className={`${inp} min-w-0 flex-1`} />
+          <input value={d.must} onChange={(e) => patch({ must: e.target.value })} maxLength={800} spellCheck={false} placeholder="Must include: Artist - Song; Artist - Song" aria-label="Must include"
+            title={mustBad ? `Can't read: ${mustBad}. Use Artist - Song, separated by semicolons.` : "Songs that will be on the playlist. Artist - Song, separated by semicolons."}
+            className={`${inp} min-w-0 flex-1 ${mustBad ? "!border-ice" : ""}`} />
+          {(mustCount > 0 || mustBad) && <span className={`flex-none text-[14px] ${mustBad ? "text-ice" : "text-mist"}`}>{mustBad ? "Can't read a line" : `${mustCount} must-have${mustCount === 1 ? "" : "s"}`}</span>}
+          <input value={d.seeds} onChange={(e) => patch({ seeds: e.target.value })} maxLength={300} spellCheck={false} placeholder="Sounds like: artists, songs, or a note" aria-label="Sounds like" className={`${inp} min-w-0 flex-1`} />
           <label className={`flex flex-none items-center gap-2 text-[14px] ${d.seeds.trim() ? "cursor-pointer" : "opacity-40"}`}>
             <input type="checkbox" checked={d.artistOnly} disabled={!d.seeds.trim()} onChange={(e) => patch({ artistOnly: e.target.checked })} className="h-5 w-5 accent-[#C4DFE6]" />All songs by this artist
           </label>

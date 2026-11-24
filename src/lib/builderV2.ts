@@ -58,6 +58,8 @@ export interface RideDraft {
   /** Target ride length in minutes (the ride may run up to 2:00 over, never under). */
   targetMin: number;
   eras: string[]; genres: string[]; seeds: string; artistOnly: boolean;
+  /** Songs that must be on the playlist, one per line ("Artist - Song"). Not saved with the ride. */
+  must: string;
   segments: SegDraft[];
   /** The master song list, in order. Segments take songs from it front to back by their songCount. */
   songs: SongDraft[];
@@ -115,7 +117,7 @@ export const TEMPLATES: Template[] = [
 ];
 
 export function emptyDraft(): RideDraft {
-  return { name: "", genre: "", vibe: "Classic", playlistUrl: "", targetMin: 30, eras: [], genres: [], seeds: "", artistOnly: false, segments: [], songs: [], bench: [] };
+  return { name: "", genre: "", vibe: "Classic", playlistUrl: "", targetMin: 30, eras: [], genres: [], seeds: "", artistOnly: false, must: "", segments: [], songs: [], bench: [] };
 }
 
 const split = (t: Target | undefined): [string, string] =>
@@ -146,7 +148,7 @@ export function fromRide(r: Ride): RideDraft {
     };
   });
   return {
-    name: r.name, genre: r.genre ?? "", vibe: r.vibe ?? "", playlistUrl: r.playlistUrl ?? "", targetMin: Math.min(90, Math.max(10, Math.floor(rideDuration(r) / 60) || 30)), eras: r.eras ?? [], genres: r.genres ?? [], seeds: r.seeds ?? "", artistOnly: r.artistOnly === true,
+    name: r.name, genre: r.genre ?? "", vibe: r.vibe ?? "", playlistUrl: r.playlistUrl ?? "", targetMin: Math.min(90, Math.max(10, Math.floor(rideDuration(r) / 60) || 30)), eras: r.eras ?? [], genres: r.genres ?? [], seeds: r.seeds ?? "", artistOnly: r.artistOnly === true, must: "",
     segments, songs, bench: [], stretches: r.stretches, sourceId: r.sourceId,
   };
 }
@@ -376,7 +378,7 @@ export function setPlanned(d: RideDraft, planned: PlannedSongLite[]): RideDraft 
 
 export const newSong = (p: PlannedSongLite): SongDraft => ({
   key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec,
-  ...(p.spare ? { spare: true } : {}), status: "pending",
+  ...(p.spare ? { spare: true } : {}), ...(p.must ? { locked: true } : {}), status: "pending",
 });
 
 /** Put a new song at `index` (its segment comes with it, from the song's intensity). */

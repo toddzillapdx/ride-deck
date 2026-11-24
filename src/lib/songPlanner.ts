@@ -26,6 +26,8 @@ export interface SongPlanInput {
   keep: { artist: string; title: string }[];
   /** How many of `count` are spares (alternates the app may drop once real lengths are known). */
   spares?: number;
+  /** Songs the admin typed that must be on the list. They count toward `count` and are never spares. */
+  must?: { artist: string; title: string }[];
   /** One song for one position. Without it the whole list is planned. */
   slot?: Slot;
 }
@@ -99,6 +101,10 @@ export function buildSongMessage(i: SongPlanInput): string {
     const spares = Math.max(0, Math.min(i.spares ?? 0, i.count - 3));
     L.push("", `Return exactly ${i.count} songs, in playing order, following the energy arc. ${i.count - spares} of them make the ride: together they should run about ${i.targetMin} minutes once the last song is cut to a 2-minute cool-down (about ${Math.round((i.targetMin * 60 - 120) / 60)} minutes before the last song).`);
     if (spares) L.push(`The other ${spares} are spares: alternates that also fit the arc (make at least two of them easy 2:30-3:30 songs or calm songs over 2:00) and may be dropped. Set spare true on exactly those ${spares}, and spare false on the rest. Keep spares in the playing order too.`);
+  }
+  if (!i.slot && i.must?.length) {
+    L.push("", `MUST INCLUDE: these ${i.must.length} song${i.must.length === 1 ? "" : "s"} must be in the list exactly as written (same artist and title). They count toward the ${i.count} songs. Place each where it fits the energy arc, give it a fitting intensity, and set spare false on it. Choose the other songs to go well with them.`);
+    for (const m of i.must) L.push(`- ${m.artist} - ${m.title}`);
   }
   if (i.keep.length) {
     L.push("", "Songs already in the playlist (do not repeat them or their artists):");
