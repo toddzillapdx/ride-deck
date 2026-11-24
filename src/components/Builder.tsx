@@ -4,6 +4,8 @@ import Stage from "./Stage";
 import MusicStep from "./MusicStep";
 import PlanStep from "./PlanStep";
 import VersionPicker from "./VersionPicker";
+import ReportDialog from "./ReportDialog";
+import { parseLengthReport } from "@/lib/playlistReport";
 import { fmtClock } from "@/lib/format";
 import {
   addBack, aligned, arrangeDraft, fitDraft, lockAll, insertSong, newSong, removeSong, replaceSong, setPlanned, toRide,
@@ -50,6 +52,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
   const [pass, setPass] = useState("");
   const [save, setSave] = useState<Save>({ phase: "idle" });
   const [picking, setPicking] = useState<number | null>(null);
+  const [reporting, setReporting] = useState(false);
   /** The list as it was before the last Fix length, so it can be put back. */
   const [undo, setUndo] = useState<RideDraft | null>(null);
 
@@ -215,6 +218,31 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
     void rememberApi({ artist: s.artist, title: s.title, durationSec: sec, ...(cand ? { candidate: cand } : {}) });
     setPicking(null);
   };
+  /** Apply the lengths from the playlist agent's reply. Returns an error to show in the dialog, or null when done. */
+  const applyReport = (text: string): string | null => {
+    const cur = ref.current;
+    const r = parseLengthReport(text, cur.songs);
+    if (!r.matches.length) return "Couldn't find any song lengths I could match to this ride's songs. Paste the agent's full reply, with lines like \"Artist - Title: 3:46\".";
+    const changes: string[] = [];
+    const byIdx = new Map(r.matches.map((m) => [m.index, m.durationSec]));
+    commit({
+      ...cur,
+      songs: cur.songs.map((x, j) => {
+        const sec = byIdx.get(j);
+        if (sec === undefined) return x;
+        if (x.durationSec !== undefined && Math.abs(x.durationSec - sec) < 1 && x.status === "ok") return x;
+        if (x.durationSec === undefined || Math.abs(x.durationSec - sec) >= 1) changes.push(x.durationSec === undefined ? `${x.title} ${fmtClock(sec)}` : `${x.title} ${fmtClock(x.durationSec)} → ${fmtClock(sec)}`);
+        void rememberApi({ artist: x.artist, title: x.title, durationSec: sec });
+        return { ...x, durationSec: sec, durationSource: "typed" as const, status: "ok" as const, note: undefined, candidates: undefined };
+      }),
+    });
+    const a = arrangeNow();
+    const parts = [changes.length ? `Updated ${changes.length}: ${changes.join("; ")}.` : "All lengths already match the playlist.", ...(r.unmatched.length ? [`Couldn't match: ${r.unmatched.join("; ")}.`] : [])];
+    if (a && a.bench && a.bench.length) parts.push(`${a.bench.length} song(s) are now on the bench.`);
+    setMsg({ text: parts.join(" "), ok: !r.unmatched.length });
+    setReporting(false);
+    return null;
+  };
   const copied = () => commit(lockAll(ref.current));
   const putBack = (key: string) => { commit(addBack(ref.current, key)); setUndo(null); };
   const undoFix = () => { if (undo) { commit(undo); setUndo(null); setMsg({ text: "Put the list back as it was.", ok: true }); } };
@@ -276,7 +304,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
             <MusicStep
               d={d} patch={patch} onTarget={setTarget} check={check} busy={busy} swapping={swapping} bench={d.bench.length} canCopy={d.songs.length > 0 && d.songs.every((s) => s.durationSec !== undefined)}
               needPass={needPass} pass={pass} onPass={(v) => { setPass(v); passcode.set(v); }} quota={quota}
-              onPlan={planAll} onFix={fixLength} onAdd={() => addSong()} onSwap={(i) => swapAt(i)} onRemove={removeAt} onLock={toggleLock} onFix1={(i) => setPicking(i)} onCopied={copied} onAddBack={putBack} onUndo={undo ? undoFix : undefined} onMsg={(text, ok) => setMsg({ text, ok })}
+              onPlan={planAll} onFix={fixLength} onAdd={() => addSong()} onSwap={(i) => swapAt(i)} onRemove={removeAt} onLock={toggleLock} onFix1={(i) => setPicking(i)} onCopied={copied} onAddBack={putBack} onUndo={undo ? undoFix : undefined} onMsg={(text, ok) => setMsg({ text, ok })} onReport={() => setReporting(true)}
             />
           ) : (
             <PlanStep d={d} setD={commit} fitted={fitted} check={check} />
@@ -307,6 +335,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
           )}
         </div>
 
+        {reporting && <ReportDialog onApply={applyReport} onClose={() => setReporting(false)} />}
         {picking !== null && d.songs[picking] && (
           <VersionPicker song={d.songs[picking]} onPick={(c) => setLength(picking, c.durationSec, c)} onType={(sec) => setLength(picking, sec)} onClose={() => setPicking(null)} />
         )}

@@ -16,7 +16,7 @@ export default function MusicStep(p: {
   d: RideDraft; patch: (x: Partial<RideDraft>) => void; onTarget: (m: number) => void; check: Check;
   busy: string | null; swapping: number | null; bench: number;
   onPlan: () => void; onFix: () => void; onAdd: () => void; onSwap: (i: number) => void; onRemove: (i: number) => void; onLock: (i: number) => void; onFix1: (i: number) => void;
-  onCopied: () => void; onAddBack: (key: string) => void; onUndo?: () => void;
+  onCopied: () => void; onReport: () => void; onAddBack: (key: string) => void; onUndo?: () => void;
   needPass: boolean; pass: string; onPass: (v: string) => void; quota?: { text: string; out: boolean } | null; onMsg: (text: string, ok?: boolean) => void; canCopy: boolean;
 }) {
   const { d, patch, check, busy } = p;
@@ -128,6 +128,7 @@ export default function MusicStep(p: {
         <button onClick={copy} disabled={!p.canCopy} className="h-10 flex-none rounded-full border-2 border-ice px-5 text-[14px] font-medium text-ice disabled:opacity-40">Copy prompt + playlist</button>
         <input value={d.playlistUrl} onChange={(e) => patch({ playlistUrl: e.target.value })} onPaste={(e) => pasteLink(e, (v) => patch({ playlistUrl: v }))} onBlur={() => patch({ playlistUrl: extractUrl(d.playlistUrl) || d.playlistUrl.trim() })}
           placeholder="Then paste the Amazon Music playlist link here" inputMode="url" aria-label="Playlist link" className={`${inp} h-10 min-w-0 flex-1`} />
+        <button onClick={p.onReport} disabled={!d.songs.length} className="h-10 flex-none rounded-full border-2 border-line px-4 text-[14px] text-ink disabled:opacity-40">Paste lengths</button>
         {isHttpUrl(extractUrl(d.playlistUrl) || d.playlistUrl.trim()) && (
           <a href={extractUrl(d.playlistUrl) || d.playlistUrl.trim()} target="_blank" rel="noopener noreferrer" className="flex h-10 flex-none items-center rounded-full bg-tile px-5 text-[14px] font-medium text-ice">Open ↗</a>
         )}

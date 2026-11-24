@@ -155,5 +155,7 @@ export function toPlaylistPromptV2(name: string, songs: PromptSong[], style?: st
     `- the playlist link (use Share, then copy the link), on its own line`,
     `- the songs you skipped and why`,
     `- any song whose length in Amazon Music differs from the one above by more than 10 seconds, with the Amazon length as m:ss`,
+    `- then a final list with EVERY song, in playlist order, one per line, in exactly this form (use the length Amazon Music shows for the track you added):`,
+    `Artist - Title: m:ss (target m:ss)`,
   ].join("\n");
 }
