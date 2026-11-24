@@ -86,7 +86,7 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
     const todo = ref.current.songs.filter((s) => s.status === "pending");
     if (!todo.length) return;
     try {
-      const res = await resolveApi(todo.map((s) => ({ artist: s.artist, title: s.title })));
+      const res = await resolveApi(todo.map((s) => ({ artist: s.artist, title: s.title, ...(s.must ? { loose: true } : {}) })));
       commit({ ...ref.current, songs: applyResolved(ref.current.songs, res) });
     } catch (e) {
       commit({ ...ref.current, songs: ref.current.songs.map((s) => (s.status === "pending" ? { ...s, status: "missing", note: (e as Error).message } : s)) });
@@ -120,6 +120,11 @@ export default function Builder({ initial, tab: firstTab = "music", heard = [], 
       await resolveAll();
       const a = arrangeNow();
       const left = a.bench.length;
+      // Say plainly if a song you asked for could not be matched to a real recording.
+      for (const s of ref.current.songs.filter((x) => x.must)) {
+        if (s.status === "doubtful") r.notes.push(`Check the version of "${s.title}": the catalog has it under a slightly different name.`);
+        else if (s.durationSec === undefined && s.status !== "pending") r.notes.push(`Couldn't find "${s.title}" in the catalog. Check the spelling, or tap its length to type one.`);
+      }
       setMsg({ text: [...r.notes, a.ok ? `Arranged to ${fmtClock(a.check.rideSec as number)}${left ? `, with ${left} spare${left === 1 ? "" : "s"} held back` : ""}.` : "Close. Use Fix length to finish the job."].join(" "), ok: a.ok });
     } catch (e) { fail(e); } finally { setBusy(null); void refreshQuota(); }
   }

@@ -33,7 +33,7 @@ export async function resolveSongs(queries: SongQuery[], search: (q: SongQuery) 
     await Promise.all(todo.slice(at, at + 3).map(async (i) => {
       const q = list[i];
       try {
-        const m = chooseMatch(q, await search(q));
+        const m = chooseMatch(q, await search(q), { loose: q.loose });
         if (m.status === "ok" && m.chosen) {
           out[i] = { artist: q.artist, title: q.title, key: keys[i], status: "ok", durationSec: m.chosen.durationSec, source: "deezer", album: m.chosen.album, candidates: m.candidates };
           await writeCache(toCached(keys[i], m.chosen, false), client);

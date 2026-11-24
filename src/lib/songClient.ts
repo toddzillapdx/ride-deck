@@ -48,7 +48,7 @@ export interface ResolvedApi {
   durationSec?: number; source?: "deezer" | "typed"; album?: string; reason?: string; candidates?: SongCandidate[];
 }
 
-export async function resolveApi(songs: { artist: string; title: string }[]): Promise<ResolvedApi[]> {
+export async function resolveApi(songs: { artist: string; title: string; loose?: boolean }[]): Promise<ResolvedApi[]> {
   const res = await fetch("/api/songs/resolve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ songs }) });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j.error ?? `Lookup failed (${res.status})`);

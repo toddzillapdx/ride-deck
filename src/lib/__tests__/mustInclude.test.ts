@@ -120,3 +120,73 @@ describe("the planner is told, and the draft locks the songs", () => {
     expect(d.songs.map((s) => !!s.locked)).toEqual([false, true, false]);
   });
 });
+
+// ---- the two ways a typed song used to disappear -----------------------------------------------------------------------------
+import { chooseMatch, titlesClose, type Candidate } from "../songs/match";
+import { arrangeDraft, newSong, type RideDraft, type SongDraft } from "../builderV2";
+
+const cand = (title: string, artist: string, o: Partial<Candidate> = {}): Candidate => ({ id: `${artist}|${title}`, title, artist, album: "The Chronic", durationSec: 238, rank: 900_000, ...o });
+
+describe("a typed title that is not spelled like the record", () => {
+  const catalog = [cand("Nuthin' But A 'G' Thang", "Dr. Dre"), cand("Nuthin' But A \"G\" Thang (Instrumental)", "Dr. Dre", { album: "Instrumentals" }), cand("Still D.R.E.", "Dr. Dre", { album: "2001" })];
+  it("without the typed flag it is still missing (nothing changes for planner songs)", () => {
+    expect(chooseMatch({ artist: "Dr Dre", title: "Nothing but a g thang" }, catalog).status).toBe("missing");
+  });
+  it("with it, the closest title by that artist is offered to confirm, not picked silently", () => {
+    const m = chooseMatch({ artist: "Dr Dre", title: "Nothing but a g thang" }, catalog, { loose: true });
+    expect(m.status).toBe("doubtful");
+    expect(m.chosen?.title).toBe("Nuthin' But A 'G' Thang");
+    expect(m.reason).toBe(`Did you mean "Nuthin' But A 'G' Thang"?`);
+    expect(m.candidates.map((c) => c.title)).not.toContain("Nuthin' But A \"G\" Thang (Instrumental)"); // a bad version is never offered
+  });
+  it("the loose flag on the query works too (that is how the lookup passes it)", () => {
+    expect(chooseMatch({ artist: "Dr Dre", title: "Nothing but a g thang", loose: true }, catalog).status).toBe("doubtful");
+  });
+  it("a different song by the same artist, or the same title by another artist, is still not a match", () => {
+    expect(chooseMatch({ artist: "Dr Dre", title: "Forgot About Dre", loose: true }, catalog).status).toBe("missing");
+    expect(chooseMatch({ artist: "Snoop Dogg", title: "Nothing but a g thang", loose: true }, catalog).status).toBe("missing");
+  });
+  it("an exact title is unaffected: it is ok, not doubtful", () => {
+    expect(chooseMatch({ artist: "Snoop Dog", title: "Gin and Juice", loose: true }, [cand("Gin And Juice", "Snoop Dogg", { album: "Doggystyle" })]).status).toBe("ok");
+  });
+  it("short titles must be nearly exact", () => {
+    expect(titlesClose("Help", "Hell")).toBe(false);
+    expect(titlesClose("Run", "Rum")).toBe(false);
+    expect(titlesClose("Nothing but a g thang", "Nuthin' But A 'G' Thang")).toBe(true);
+    expect(titlesClose("Bohemian Rhapsody", "Another One Bites the Dust")).toBe(false);
+  });
+});
+
+describe("a song you asked for never disappears into Held back", () => {
+  const song = (title: string, sec: number | undefined, o: Partial<SongDraft> = {}): SongDraft => ({ ...newSong({ title, artist: "A", intensity: 5 }), durationSec: sec, status: sec ? "ok" : "missing", ...o });
+  const draftWith = (extra: SongDraft): RideDraft => ({
+    ...emptyDraft(), targetMin: 20,
+    songs: [song("Warm", 180, { intensity: 1 }), ...Array.from({ length: 5 }, (_, i) => song(`Mid ${i}`, 200)), extra, song("Cool", 200, { intensity: 2 })].map((s, i) => ({ ...s, pos: i })),
+  });
+  it("a must-include song with no length stays on the list, flagged, and is not benched", () => {
+    const d = draftWith(song("Nothing but a g thang", undefined, { locked: true, must: true }));
+    const { draft } = arrangeDraft(d);
+    expect(draft.songs.map((s) => s.title)).toContain("Nothing but a g thang");
+    expect(draft.bench.map((s) => s.title)).not.toContain("Nothing but a g thang");
+    expect(draft.songs[0].title).toBe("Warm");
+    expect(draft.songs[draft.songs.length - 1].title).toBe("Cool");
+  });
+  it("it sits in the middle, near where the planner put it", () => {
+    const { draft } = arrangeDraft(draftWith(song("Typed", undefined, { locked: true, must: true })));
+    const i = draft.songs.findIndex((s) => s.title === "Typed");
+    expect(i).toBeGreaterThan(0);
+    expect(i).toBeLessThan(draft.songs.length - 1);
+  });
+  it("an ordinary song with no length still goes to Held back, as before", () => {
+    const { draft } = arrangeDraft(draftWith(song("Plain", undefined)));
+    expect(draft.bench.map((s) => s.title)).toContain("Plain");
+    expect(draft.songs.map((s) => s.title)).not.toContain("Plain");
+  });
+  it("and it keeps blocking the save until it has a length (the existing rule)", async () => {
+    const { soundtrackProblems } = await import("../songFlow");
+    const { checkSongs } = await import("../songFlow");
+    const { draft } = arrangeDraft(draftWith(song("Typed", undefined, { locked: true, must: true })));
+    const problems = soundtrackProblems({ name: "x", songs: draft.songs, targetMin: 20, check: checkSongs(draft.songs, 20) });
+    expect(problems.join(" | ")).toMatch(/needs a length/);
+  });
+});

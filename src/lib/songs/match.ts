@@ -11,7 +11,11 @@ export interface Candidate {
   isrc?: string;
 }
 
-export interface SongQuery { artist: string; title: string }
+export interface SongQuery {
+  artist: string; title: string;
+  /** The title was typed by a person (a must-include song), so a close spelling counts as "did you mean": see chooseMatch. */
+  loose?: boolean;
+}
 
 export type MatchStatus = "ok" | "doubtful" | "missing";
 
@@ -70,12 +74,41 @@ export function badVersion(c: Pick<Candidate, "title" | "album">, wanted: string
   return false;
 }
 
+/** Edit distance between two strings (single-row version). */
+function distance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Two titles are close when a few letters differ ("Nothing but a g thang" and "Nuthin' But A 'G' Thang"). */
+export function titlesClose(wanted: string, found: string): boolean {
+  const a = dense(baseTitle(wanted)), b = dense(baseTitle(found));
+  if (!a || !b) return false;
+  if (Math.max(a.length, b.length) < 6) return false; // short titles must match exactly, or "Help" would be offered for "Hell"
+  return distance(a, b) <= Math.max(1, Math.floor(Math.max(a.length, b.length) * 0.25));
+}
+
 /** Pick the recording for a song from catalog search results. */
-export function chooseMatch(query: SongQuery, results: Candidate[]): Match {
+export function chooseMatch(query: SongQuery, results: Candidate[], opts: { loose?: boolean } = {}): Match {
+  const loose = opts.loose ?? query.loose ?? false;
   const wantedBase = dense(baseTitle(query.title));
   const sameArtist = results.filter((r) => artistMatches(r.artist, query.artist) && r.durationSec > 0);
   const sameSong = sameArtist.filter((r) => dense(baseTitle(r.title)) === wantedBase);
   const good = sameSong.filter((r) => !badVersion(r, query.title)).sort((a, b) => b.rank - a.rank);
+  if (!good.length && loose) {
+    // A typed title that is not spelled like the record: offer the closest title by the same artist, to be confirmed by a person.
+    const near = sameArtist.filter((r) => titlesClose(query.title, r.title) && !badVersion(r, query.title)).sort((a, b) => b.rank - a.rank);
+    if (near.length) {
+      const seen = new Set<string>();
+      const candidates = near.filter((c) => { const k = `${dense(c.album)}|${c.durationSec}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+      return { status: "doubtful", chosen: near[0], candidates, reason: `Did you mean "${near[0].title}"?` };
+    }
+  }
   if (!good.length) {
     return {
       status: "missing", candidates: sameSong.sort((a, b) => b.rank - a.rank).slice(0, 5),

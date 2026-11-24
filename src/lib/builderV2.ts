@@ -18,6 +18,8 @@ export interface SongDraft extends Omit<RideTrack, "segmentIndex"> {
   /** An alternate the planner offered (dropped first when trimming to the target). */
   spare?: boolean;
   locked?: boolean;
+  /** Typed in Must include: always on the list, and looked up with "did you mean" spelling help. */
+  must?: boolean;
   /** Lookup state (never saved). */
   status?: "pending" | "ok" | "cached" | "doubtful" | "missing";
   note?: string;
@@ -378,7 +380,7 @@ export function setPlanned(d: RideDraft, planned: PlannedSongLite[]): RideDraft 
 
 export const newSong = (p: PlannedSongLite): SongDraft => ({
   key: uid(), title: p.title, artist: p.artist, intensity: p.intensity, genre: p.genre, era: p.era, reason: p.reason, approxDurationSec: p.approxDurationSec,
-  ...(p.spare ? { spare: true } : {}), ...(p.must ? { locked: true } : {}), status: "pending",
+  ...(p.spare ? { spare: true } : {}), ...(p.must ? { locked: true, must: true } : {}), status: "pending",
 });
 
 /** Put a new song at `index` (its segment comes with it, from the song's intensity). */
@@ -448,8 +450,19 @@ export function fitDraft(d: RideDraft): FitOutcome {
 export function arrangeDraft(d: RideDraft): { draft: RideDraft; arranged: Arranged<SongDraft> } {
   const pool = [...d.songs, ...d.bench];
   const arranged = arrange(pool, d.targetMin);
-  const same = arranged.songs.length === d.songs.length && arranged.songs.every((x, i) => x.key === d.songs[i].key);
-  let next: RideDraft = { ...d, songs: arranged.songs, bench: arranged.bench };
+  // A locked song with no length yet cannot be placed by length, but it must not vanish into "Held back": a song the admin asked for
+  // stays on the list, flagged as needing a length or a version check (which also keeps the soundtrack from being saved until fixed).
+  const stranded = arranged.bench.filter((s) => (s.locked || s.must) && !(typeof s.durationSec === "number" && s.durationSec > 0));
+  const songs = arranged.songs.slice();
+  for (const s of stranded) {
+    const p = s.pos ?? songs.length;
+    let at = songs.findIndex((x, i) => i >= 1 && (x.pos ?? 0) > p);
+    if (at < 0) at = songs.length - 1;
+    songs.splice(Math.max(1, Math.min(at, songs.length - 1)), 0, s);
+  }
+  const bench = arranged.bench.filter((s) => !stranded.includes(s));
+  const same = songs.length === d.songs.length && songs.every((x, i) => x.key === d.songs[i].key);
+  let next: RideDraft = { ...d, songs, bench };
   if (!same) next = suggestAll(next);
-  return { draft: next, arranged };
+  return { draft: next, arranged: { ...arranged, bench } };
 }

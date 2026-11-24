@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   }
 
   if (!Array.isArray(b.songs) || !b.songs.length) return bad("songs must be a list");
-  const songs = (b.songs as Record<string, unknown>[]).slice(0, 40).map((s) => ({ artist: text(s?.artist, 120), title: text(s?.title, 120) })).filter((s) => s.artist && s.title);
+  const songs = (b.songs as Record<string, unknown>[]).slice(0, 40).map((s) => ({ artist: text(s?.artist, 120), title: text(s?.title, 120), ...(s?.loose === true ? { loose: true } : {}) })).filter((s) => s.artist && s.title);
   if (!songs.length) return bad("Each song needs an artist and a title.");
   return NextResponse.json({ songs: await resolveSongs(songs) });
 }
