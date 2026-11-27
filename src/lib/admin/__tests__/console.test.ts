@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countsOf, inviteMailto, inviteMessage, isActiveRider, suggestEmail, type ConsoleRider } from "../console";
+import { countsOf, rideInviteLink, inviteMailto, inviteMessage, isActiveRider, suggestEmail, type ConsoleRider } from "../console";
 
 const NOW = Date.parse("2026-11-20T12:00:00Z");
 const rider = (o: Partial<ConsoleRider>): ConsoleRider => ({ id: "u", email: "a@example.com", joinedAt: "2026-11-01T00:00:00Z", lastSignInAt: null, lastRideAt: null, rideCount: 0, service: null, disabled: false, isAdmin: false, isYou: false, ...o });
@@ -14,7 +14,7 @@ describe("who counts as active", () => {
   });
   it("counts requests, waiting invites, active and disabled riders", () => {
     const c = countsOf(
-      [{ email: "a@x.co", note: null, status: "new", createdAt: "", suggestion: null }, { email: "b@x.co", note: null, status: "declined", createdAt: "", suggestion: null }],
+      [{ email: "a@x.co", note: null, status: "new", createdAt: "", suggestion: null, service: null, favoriteSong: null }, { email: "b@x.co", note: null, status: "declined", createdAt: "", suggestion: null, service: null, favoriteSong: null }],
       [{ email: "c@x.co", note: null, createdAt: "", suggestion: null }],
       [rider({ lastRideAt: "2026-11-19T00:00:00Z" }), rider({ disabled: true }), rider({})], NOW);
     expect(c).toEqual({ newRequests: 1, waiting: 1, active: 1, disabled: 1 });
@@ -56,5 +56,24 @@ describe("the invitation email", () => {
     const link = inviteMailto("pat@example.com", "https://ridedeck.app");
     expect(link.startsWith("mailto:pat%40example.com?subject=")).toBe(true);
     expect(decodeURIComponent(link)).toContain("https://ridedeck.app");
+  });
+});
+
+describe("an invitation that sends the person to a ride", () => {
+  const ride = { id: "pub-11111111-2222-4333-8444-555555555555", title: "Life During Wartime - 20 min" };
+  it("links to the sign-in page, then the ride", () => {
+    expect(rideInviteLink(ride.id, "https://ridedeck.app")).toBe("https://ridedeck.app/login?next=%2Fride%2Fpub-11111111-2222-4333-8444-555555555555");
+  });
+  it("names the ride and uses that link, in the text, the html and the mail link", () => {
+    const m = inviteMessage("https://ridedeck.app", ride);
+    expect(m.text).toContain(ride.title);
+    expect(m.text).toContain("https://ridedeck.app/login?next=");
+    expect(m.html).toContain(ride.title);
+    expect(decodeURIComponent(inviteMailto("a@x.co", "https://ridedeck.app", ride))).toContain(ride.title);
+  });
+  it("without a ride it is the same plain invitation as before", () => {
+    const m = inviteMessage("https://ridedeck.app");
+    expect(m.text).not.toContain("login?next");
+    expect(m.text).toContain("Open https://ridedeck.app on your phone");
   });
 });

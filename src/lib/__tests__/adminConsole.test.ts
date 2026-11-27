@@ -4,6 +4,7 @@ import { FakeDb } from "../db/__tests__/fakeDb";
 // ---- stand-ins: a signed-in person, a pretend is_admin() answer, the service client (in-memory tables + an auth admin) ----------
 type U = { id: string; email: string; created_at: string; last_sign_in_at: string | null; banned_until: string | null };
 const ME = { id: "aaaaaaaa-0000-4000-8000-00000000000a", email: "boss@example.com" };
+const LIVE = "11111111-2222-4333-8444-555555555555", DRAFT = "22222222-2222-4333-8444-555555555555";
 const R1 = "bbbbbbbb-0000-4000-8000-00000000000b", R2 = "cccccccc-0000-4000-8000-00000000000c";
 const st = {
   user: ME as { id: string; email: string } | null, admin: true,
@@ -55,6 +56,10 @@ beforeEach(() => {
     { email: "gone@example.com", note: null, status: "declined", created_at: daysAgo(3) },
     { email: "rider1@example.com", note: null, status: "invited", created_at: daysAgo(12) },
   ]);
+  st.fake.seed("curated_rides", [
+    { id: LIVE, title: "Life During Wartime - 20 min", status: "published", published_at: daysAgo(1) },
+    { id: DRAFT, title: "Unfinished", status: "draft", published_at: null },
+  ]);
   st.fake.seed("ride_logs", [{ user_id: R1, started_at: daysAgo(2) }, { user_id: R1, started_at: daysAgo(6) }, { user_id: ME.id, started_at: daysAgo(1) }]);
   st.fake.seed("app_settings", [{ user_id: R1, key: "main", value: { hiddenPresets: [], service: "spotify" } }]);
   delete process.env.RESEND_API_KEY;
@@ -92,6 +97,42 @@ describe("the console", () => {
     expect(by("boss@example.com")).toMatchObject({ isAdmin: true, isYou: true, rideCount: 1 });
     expect(body.counts).toEqual({ newRequests: 1, waiting: 1, active: 2, disabled: 1 }); // boss + rider1 rode in the last 7 days; rider2 is disabled
     expect(body.emailConfigured).toBe(false);
+  });
+});
+
+describe("inviting someone to a ride", () => {
+  const sendWith = (body: Record<string, unknown>) => {
+    process.env.RESEND_API_KEY = "re_test";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    return { fetchMock, res: post(body) };
+  };
+  it("the console lists the live rides only, and each request's service and song", async () => {
+    st.fake.table("invite_requests").find((r) => r.email === "new1@example.com")!.service = "amazon";
+    st.fake.table("invite_requests").find((r) => r.email === "new1@example.com")!.favorite_song = "Toto - Africa";
+    const b = await (await consoleGet()).json();
+    expect(b.rides).toEqual([{ id: `pub-${LIVE}`, title: "Life During Wartime - 20 min" }]);
+    expect(b.requests.find((r: { email: string }) => r.email === "new1@example.com")).toMatchObject({ service: "amazon", favoriteSong: "Toto - Africa" });
+  });
+  it("approving with a ride emails a link that signs them in and opens that ride", async () => {
+    const { fetchMock, res } = sendWith({ action: "approve_request", email: "new1@example.com", notify: true, rideId: `pub-${LIVE}` });
+    const out = await (await res).json();
+    expect(out.email.sent).toBe(true);
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sent.text).toContain("Life During Wartime - 20 min");
+    expect(sent.text).toContain(`/login?next=${encodeURIComponent(`/ride/pub-${LIVE}`)}`);
+  });
+  it("a ride that is not live is refused, and nobody is approved", async () => {
+    const res = await post({ action: "approve_request", email: "new1@example.com", notify: false, rideId: `pub-${DRAFT}` });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(table("invite_requests").find((r) => r.email === "new1@example.com")!.status).toBe("new");
+    expect(table("invites").find((i) => i.email === "new1@example.com")).toBeUndefined();
+  });
+  it("a made-up ride id is a 400 and a missing one is simply the plain invitation", async () => {
+    expect((await post({ action: "add_invite", email: "x@example.com", rideId: "pub-nope" })).status).toBe(400);
+    const { fetchMock, res } = sendWith({ action: "add_invite", email: "plain@example.com", notify: true });
+    expect((await res).status).toBe(200);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).text).not.toContain("login?next");
   });
 });
 

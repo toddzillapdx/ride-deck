@@ -2,7 +2,7 @@
 export type Access = { action: "next" } | { action: "rewrite"; to: string } | { action: "redirect"; to: string };
 
 /** Pages anyone can open. Everything else needs a signed-in person (when accounts are on). */
-export const PUBLIC_PAGES = ["/login", "/welcome"];
+export const PUBLIC_PAGES = ["/login", "/welcome", "/privacy"];
 
 export function decideAccess(pathname: string, search: string, signedIn: boolean, accountsOn: boolean): Access {
   if (!accountsOn) return { action: "next" };

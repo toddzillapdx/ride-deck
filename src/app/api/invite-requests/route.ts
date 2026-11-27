@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/auth/email";
 import { db } from "@/lib/db";
+import { MAX_SONG, isRequestService } from "@/lib/admin/console";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,15 @@ const HOURLY_CAP = 40;
  * or who already asked. A hidden field that humans never fill in catches simple bots.
  */
 export async function POST(req: Request) {
-  let body: { email?: unknown; note?: unknown; website?: unknown };
+  let body: { email?: unknown; note?: unknown; website?: unknown; service?: unknown; favoriteSong?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Body must be JSON" }, { status: 400 }); }
   const email = normalizeEmail(body.email);
   if (!isPlausibleEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   const ok = NextResponse.json({ ok: true });
   if (typeof body.website === "string" && body.website.trim()) return ok; // a bot filled the hidden field: pretend it worked
+  if (!isRequestService(body.service)) return NextResponse.json({ error: "Choose the music service you use." }, { status: 400 });
+  const favoriteSong = typeof body.favoriteSong === "string" ? body.favoriteSong.replace(/\s+/g, " ").trim().slice(0, MAX_SONG) : "";
+  if (!favoriteSong) return NextResponse.json({ error: "Tell us one song you love to ride to." }, { status: 400 });
   const note = typeof body.note === "string" ? body.note.replace(/\s+/g, " ").trim().slice(0, 300) : "";
 
   try {
@@ -25,7 +29,7 @@ export async function POST(req: Request) {
     const since = new Date(Date.now() - 3600_000).toISOString();
     const { count } = await c.from("invite_requests").select("email", { count: "exact", head: true }).gte("created_at", since);
     if ((count ?? 0) >= HOURLY_CAP) return NextResponse.json({ error: "A lot of people are asking right now. Please try again a bit later." }, { status: 429 });
-    const { error } = await c.from("invite_requests").upsert({ email, ...(note ? { note } : {}) }, { onConflict: "email", ignoreDuplicates: true });
+    const { error } = await c.from("invite_requests").upsert({ email, service: body.service, favorite_song: favoriteSong, ...(note ? { note } : {}) }, { onConflict: "email", ignoreDuplicates: true });
     if (error) console.error("invite request not saved:", error.message);
   } catch (e) {
     console.error("invite request failed:", (e as Error).message);

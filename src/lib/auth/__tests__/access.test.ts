@@ -11,6 +11,7 @@ describe("who sees which page", () => {
   it("signed out: login and welcome are open", () => {
     expect(decideAccess("/login", "?next=%2F", false, true)).toEqual({ action: "next" });
     expect(decideAccess("/welcome", "", false, true)).toEqual({ action: "next" });
+    expect(decideAccess("/privacy", "", false, true)).toEqual({ action: "next" }); // the privacy note is readable before signing in
   });
   it("signed out: everything else goes to sign-in and comes back afterwards", () => {
     expect(decideAccess("/history", "", false, true)).toEqual({ action: "redirect", to: "/login?next=%2Fhistory" });

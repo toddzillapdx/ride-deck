@@ -3,11 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import PhoneShell from "./PhoneShell";
 import ConfirmDialog from "./ConfirmDialog";
 import { LogoMark, Wordmark } from "./Logo";
-import { inviteMessage, isActiveRider, suggestEmail, type ConsoleData, type ConsoleRider } from "@/lib/admin/console";
+import { REQUEST_SERVICE_LABEL, inviteMessage, isActiveRider, suggestEmail, type ConsoleData, type ConsoleRide, type ConsoleRider } from "@/lib/admin/console";
 import { SERVICE_LABEL } from "@/lib/services";
 
 type Tab = "requests" | "invited" | "riders" | "activity";
-type Reply = { message: string; email?: { to: string; sent: boolean; reason?: string; detail?: string; mailto?: string } };
+type Reply = { message: string; ride?: { id: string; title: string } | null; email?: { to: string; sent: boolean; reason?: string; detail?: string; mailto?: string } };
 
 const btn = "flex h-[44px] items-center justify-center rounded-full px-5 text-[14px] font-medium disabled:opacity-40";
 const solid = `${btn} bg-ice text-ground`;
@@ -32,6 +32,8 @@ export default function AdminConsole() {
   const [notify, setNotify] = useState(true);
   const [handled, setHandled] = useState(false);
   const [add, setAdd] = useState({ email: "", note: "" });
+  const [pick, setPick] = useState<Record<string, string>>({}); // the ride to send each person to, by email ("" = none)
+  const rideOf = (k: string) => pick[k] || undefined;
 
   const load = useCallback(async () => {
     try {
@@ -99,7 +101,7 @@ export default function AdminConsole() {
                 <span className="text-[14px] text-mist">{notice.email.reason === "not-configured" ? "Automatic email isn't set up yet, so send the invitation yourself:" : `The email didn't go out${notice.email.detail ? ` (${notice.email.detail})` : ""}. Send it yourself:`}</span>
                 <div className="flex flex-wrap gap-2">
                   <a href={notice.email.mailto} className={solid}>Open in my mail app</a>
-                  <button className={ghost} onClick={() => navigator.clipboard?.writeText(inviteMessage().text)}>Copy the message</button>
+                  <button className={ghost} onClick={() => navigator.clipboard?.writeText(inviteMessage(undefined, notice.ride).text)}>Copy the message</button>
                 </div>
               </div>
             )}
@@ -116,7 +118,8 @@ export default function AdminConsole() {
               <input className={field} type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="their email" value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} />
               {typo && <button onClick={() => setAdd({ ...add, email: typo })} className="self-start text-left text-[14px] text-ice underline underline-offset-4">Did you mean {typo}?</button>}
               <input className={field} placeholder="a note for yourself (optional)" value={add.note} maxLength={300} onChange={(e) => setAdd({ ...add, note: e.target.value })} />
-              <button disabled={!add.email.trim() || busy !== null} className={solid} onClick={() => act("add", { action: "add_invite", email: add.email, note: add.note, notify }, () => setAdd({ email: "", note: "" }))}>{busy === "add" ? "Working…" : notify ? "Invite and email them" : "Invite"}</button>
+              <RideSelect rides={data.rides} value={pick["_add"] ?? ""} onChange={(v) => setPick({ ...pick, _add: v })} />
+              <button disabled={!add.email.trim() || busy !== null} className={solid} onClick={() => act("add", { action: "add_invite", email: add.email, note: add.note, notify, rideId: rideOf("_add") }, () => { setAdd({ email: "", note: "" }); setPick({ ...pick, _add: "" }); })}>{busy === "add" ? "Working…" : notify ? "Invite and email them" : "Invite"}</button>
             </div>
             <label className="flex items-center gap-3 text-[14px] text-ink"><input type="checkbox" className="h-5 w-5" checked={notify} onChange={(e) => setNotify(e.target.checked)} />Email the invitation when I approve or invite {data.emailConfigured ? "" : "(you'll send it from your mail app)"}</label>
 
@@ -126,10 +129,14 @@ export default function AdminConsole() {
                 <div key={r.email} className="flex flex-col gap-2 rounded-[16px] border-2 border-line bg-tile px-4 py-3">
                   <span className="break-all text-[16px] text-ink">{r.email}</span>
                   {r.suggestion && <span className="text-[14px] text-ice">Looks like a typo. Did you mean {r.suggestion}?</span>}
+                  {(r.service || r.favoriteSong) && (
+                    <span className="text-[14px] text-ink">{r.service ? REQUEST_SERVICE_LABEL[r.service] : ""}{r.service && r.favoriteSong ? " · " : ""}{r.favoriteSong ? <>loves “{r.favoriteSong}”</> : null}</span>
+                  )}
                   {r.note && <span className="text-[14px] font-light text-ice">“{r.note}”</span>}
                   <span className="text-[14px] font-light text-mist">Asked {ago(r.createdAt)}</span>
+                  <RideSelect rides={data.rides} value={pick[r.email] ?? ""} onChange={(v) => setPick({ ...pick, [r.email]: v })} />
                   <div className="flex gap-2">
-                    <button disabled={busy !== null} className={solid} onClick={() => act(`a-${r.email}`, { action: "approve_request", email: r.email, notify })}>{busy === `a-${r.email}` ? "Working…" : "Approve"}</button>
+                    <button disabled={busy !== null} className={solid} onClick={() => act(`a-${r.email}`, { action: "approve_request", email: r.email, notify, rideId: rideOf(r.email) })}>{busy === `a-${r.email}` ? "Working…" : "Approve"}</button>
                     <button disabled={busy !== null} className={ghost} onClick={() => act(`d-${r.email}`, { action: "decline_request", email: r.email })}>Decline</button>
                   </div>
                 </div>
@@ -156,8 +163,9 @@ export default function AdminConsole() {
                 <span className="break-all text-[16px] text-ink">{i.email}</span>
                 {i.suggestion && <span className="text-[14px] text-ice">Looks like a typo. Did you mean {i.suggestion}? Remove this one and invite the right address.</span>}
                 <span className="text-[14px] font-light text-mist">Invited {ago(i.createdAt)}{i.note ? ` · ${i.note}` : ""}</span>
+                <RideSelect rides={data.rides} value={pick[i.email] ?? ""} onChange={(v) => setPick({ ...pick, [i.email]: v })} />
                 <div className="flex flex-wrap gap-2">
-                  <button disabled={busy !== null} className={solid} onClick={() => act(`s-${i.email}`, { action: "send_invite_email", email: i.email })}>{busy === `s-${i.email}` ? "Working…" : "Send email"}</button>
+                  <button disabled={busy !== null} className={solid} onClick={() => act(`s-${i.email}`, { action: "send_invite_email", email: i.email, rideId: rideOf(i.email) })}>{busy === `s-${i.email}` ? "Working…" : "Send email"}</button>
                   <button disabled={busy !== null} className={ghost} onClick={() => setAsk({ title: `Remove ${i.email}?`, body: "They'll no longer be able to sign up. You can invite them again later.", label: "Remove", run: () => act(`x-${i.email}`, { action: "remove_invite", email: i.email }) })}>Remove</button>
                 </div>
               </div>
@@ -188,6 +196,19 @@ export default function AdminConsole() {
       </div>
       {ask && <ConfirmDialog fixed title={ask.title} body={ask.body} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)} />}
     </PhoneShell>
+  );
+}
+
+/** "Send them to a ride" in the invitation. Only live rides are listed; the server checks again. */
+function RideSelect({ rides, value, onChange }: { rides: ConsoleRide[]; value: string; onChange: (v: string) => void }) {
+  if (!rides.length) return null;
+  return (
+    <label className="flex flex-col gap-1 text-[14px] font-light text-mist">Send them to a ride in the invitation (optional)
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Ride for the invitation" className={`${field} h-[44px] text-[14px]`}>
+        <option value="">No ride, just the app</option>
+        {rides.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+      </select>
+    </label>
   );
 }
 

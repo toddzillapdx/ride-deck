@@ -4,7 +4,16 @@ import type { Service } from "../services";
 // ---- what the console shows -----------------------------------------------------------------------------------------
 
 export type RequestStatus = "new" | "invited" | "declined";
-export interface ConsoleRequest { email: string; note: string | null; status: RequestStatus; createdAt: string; suggestion: string | null }
+/** What a person says they use when they ask for an invite. "other" covers Apple Music and anything else (Apple is built but switched off). */
+export const REQUEST_SERVICES = ["spotify", "amazon", "apple", "other"] as const;
+export type RequestService = (typeof REQUEST_SERVICES)[number];
+export const isRequestService = (v: unknown): v is RequestService => typeof v === "string" && (REQUEST_SERVICES as readonly string[]).includes(v);
+export const REQUEST_SERVICE_LABEL: Record<RequestService, string> = { spotify: "Spotify", amazon: "Amazon Music", apple: "Apple Music", other: "Something else" };
+export const MAX_SONG = 150;
+
+export interface ConsoleRequest { email: string; note: string | null; status: RequestStatus; createdAt: string; suggestion: string | null; service: RequestService | null; favoriteSong: string | null }
+/** A live ride the admin can send someone to in their invitation. */
+export interface ConsoleRide { id: string; title: string }
 /** On the invite list but no account yet (they have not signed in). */
 export interface ConsoleInvite { email: string; note: string | null; createdAt: string; suggestion: string | null }
 export interface ConsoleRider {
@@ -13,7 +22,7 @@ export interface ConsoleRider {
 }
 export interface ConsoleLogEntry { at: string; admin: string; action: string; target: string; detail: string | null }
 export interface ConsoleData {
-  requests: ConsoleRequest[]; invites: ConsoleInvite[]; riders: ConsoleRider[]; log: ConsoleLogEntry[];
+  requests: ConsoleRequest[]; rides: ConsoleRide[]; invites: ConsoleInvite[]; riders: ConsoleRider[]; log: ConsoleLogEntry[];
   emailConfigured: boolean; ridersTruncated: boolean;
   counts: { newRequests: number; waiting: number; active: number; disabled: number };
 }
@@ -74,18 +83,24 @@ export const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL || "https://rided
 
 export interface InviteMessage { subject: string; text: string; html: string }
 
-/** What a new tester receives. Short, plain, says exactly what to do next. */
-export function inviteMessage(site = siteUrl()): InviteMessage {
+/** Signs the person in, then opens one ride. `rideId` is the full id ("pub-<uuid>"). */
+export const rideInviteLink = (rideId: string, site = siteUrl()) => `${site}/login?next=${encodeURIComponent(`/ride/${rideId}`)}`;
+export interface InviteRide { id: string; title: string }
+
+/** What a new tester receives. Short, plain, says exactly what to do next. With a ride, the link signs them in and opens that ride. */
+export function inviteMessage(site = siteUrl(), ride?: InviteRide | null): InviteMessage {
+  const link = ride ? rideInviteLink(ride.id, site) : null;
   const subject = "You're in: welcome to the RideDeck beta";
   const text = [
     "You're in. Thanks for helping test RideDeck.",
     "",
     "RideDeck is a ride coach for your indoor bike. You pick a ride, press play on its playlist in your own music app, and the app tells you what to do and when.",
     "",
+    ...(ride ? ["I put a ride together for you: " + ride.title + ".", ""] : []),
     "To start:",
-    `1. Open ${site} on your phone.`,
+    `1. Open ${link ?? site} on your phone.`,
     "2. Tap Sign in and enter this email address. We email you an 8-digit code (no password).",
-    "3. Choose your music service, pick a ride and tap Start.",
+    ride ? "3. Choose your music service and tap Start." : "3. Choose your music service, pick a ride and tap Start.",
     "",
     "Tip: in Safari tap Share, then Add to Home Screen, so it opens full screen.",
     "",
@@ -94,18 +109,19 @@ export function inviteMessage(site = siteUrl()): InviteMessage {
     "Thanks,",
     "RideDeck",
   ].join("\n");
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#10222a;max-width:520px">`
     + `<p><b>You're in.</b> Thanks for helping test RideDeck.</p>`
     + `<p>RideDeck is a ride coach for your indoor bike. You pick a ride, press play on its playlist in your own music app, and the app tells you what to do and when.</p>`
-    + `<p>To start:</p><ol><li>Open <a href="${esc(site)}">${esc(site)}</a> on your phone.</li><li>Tap <b>Sign in</b> and enter this email address. We email you an 8-digit code (no password).</li><li>Choose your music service, pick a ride and tap <b>Start</b>.</li></ol>`
+    + (ride ? `<p>I put a ride together for you: <b>${esc(ride.title)}</b>.</p>` : "")
+    + `<p>To start:</p><ol><li>Open <a href="${esc(link ?? site)}">${esc(link ?? site)}</a> on your phone.</li><li>Tap <b>Sign in</b> and enter this email address. We email you an 8-digit code (no password).</li><li>${ride ? "Choose your music service and tap <b>Start</b>." : "Choose your music service, pick a ride and tap <b>Start</b>."}</li></ol>`
     + `<p style="color:#4b6670">Tip: in Safari tap Share, then Add to Home Screen, so it opens full screen.</p>`
     + `<p>This is a small beta, so I'd love to hear what works and what doesn't. Just reply to this email.</p><p>Thanks,<br>RideDeck</p></div>`;
   return { subject, text, html };
 }
 
 /** A mail link that opens the person's own mail app with the invitation filled in: the fallback when automatic email is not set up. */
-export const inviteMailto = (to: string, site = siteUrl()) => {
-  const m = inviteMessage(site);
+export const inviteMailto = (to: string, site = siteUrl(), ride?: InviteRide | null) => {
+  const m = inviteMessage(site, ride);
   return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.text)}`;
 };

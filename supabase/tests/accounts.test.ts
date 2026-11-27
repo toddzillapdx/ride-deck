@@ -278,3 +278,18 @@ describe("deleting an account", () => {
     expect((await root.query("select count(*)::int n from public.rides where user_id = $1", [A.id])).rows[0].n).toBeGreaterThan(0);
   });
 });
+
+describe("0008: invite requests also carry the music service and a favorite song", () => {
+  it("accepts the four services and a short song, and rejects anything else", async () => {
+    await as("service", async (q) => {
+      for (const sv of ["spotify", "amazon", "apple", "other"]) await q("insert into public.invite_requests (email, service, favorite_song) values ($1, $2, 'A - B')", [`${sv}@x.co`, sv]);
+      await q("insert into public.invite_requests (email) values ('old@x.co')"); // an old-style request: both stay empty
+      await q("savepoint s"); await expect(q("insert into public.invite_requests (email, service) values ('t@x.co', 'tidal')")).rejects.toThrow(/check constraint/); await q("rollback to savepoint s");
+      await expect(q("insert into public.invite_requests (email, favorite_song) values ('l@x.co', $1)", ["x".repeat(151)])).rejects.toThrow(/check constraint/);
+    });
+  });
+  it("0008 can be run again without error", async () => {
+    await root.query(file("migrations/0008_request_intake.sql"));
+    await root.query(file("migrations/0008_request_intake.sql"));
+  });
+});
