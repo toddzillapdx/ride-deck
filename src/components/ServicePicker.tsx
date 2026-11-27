@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ACTIVE_SERVICES, SERVICE_LABEL, type Service } from "@/lib/services";
 
 /** Which music service the rider uses. Their ride playlists open in it. Saved to their account, so it is asked once. */
-export default function ServicePicker({ value, onChange, intro = false }: { value: Service | null; onChange: (s: Service) => void; intro?: boolean }) {
+export default function ServicePicker({ value, onChange, intro = false, note }: { value: Service | null; onChange: (s: Service) => void; intro?: boolean; note?: string }) {
   const [busy, setBusy] = useState<Service | null>(null);
   const [error, setError] = useState("");
 
@@ -22,6 +22,7 @@ export default function ServicePicker({ value, onChange, intro = false }: { valu
   return (
     <div className="flex flex-col gap-3 rounded-[18px] border-2 border-line bg-tile px-4 py-4">
       <span className="text-[16px] font-normal text-ink">{intro ? "Which music service do you use?" : "Your music service"}</span>
+      {note && <span className="text-[14px] leading-snug text-ice">{note}</span>}
       {intro && <span className="text-[14px] font-light leading-snug text-mist">Every ride has a playlist on both. Pick yours and its playlists open there. You can change it any time.</span>}
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Music service">
         {ACTIVE_SERVICES.map((s) => (

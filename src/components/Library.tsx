@@ -7,6 +7,7 @@ import Stage from "./Stage";
 import PhoneShell from "./PhoneShell";
 import ConfirmDialog from "./ConfirmDialog";
 import ServicePicker from "./ServicePicker";
+import { isCuratedId } from "@/lib/curatedIds";
 import { trackEvent } from "@/lib/events";
 import { SERVICE_LABEL, type Service } from "@/lib/services";
 import type { PublishedRide } from "@/lib/db/curated";
@@ -31,6 +32,9 @@ export default function Library() {
   const [status, setStatus] = useState<"loading" | "ok" | "off" | "error">("loading");
   const [detail, setDetail] = useState("");
   const [modal, setModal] = useState<Modal>(null);
+  /** Set when someone arrives from an invitation to a particular ride: after they choose a music service, that ride opens. */
+  const [forRide, setForRide] = useState<string | null>(null);
+  useEffect(() => { const r = new URLSearchParams(window.location.search).get("ride"); setForRide(r && isCuratedId(r) ? r : null); }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -85,7 +89,8 @@ export default function Library() {
   /** The rider's music service: asked once (the picker), then a small line to change it. */
   const serviceBlock = status === "ok" && (
     service === null || changing
-      ? <ServicePicker value={service} intro={service === null} onChange={(sv) => { setService(sv); setChanging(false); refresh(); }} />
+      ? <ServicePicker value={service} intro={service === null} note={service === null && forRide ? "Your ride is ready. Choose your music service and it opens." : undefined}
+        onChange={(sv) => { if (forRide) { window.location.href = `/ride/${forRide}`; return; } setService(sv); setChanging(false); refresh(); }} />
       : <button onClick={() => setChanging(true)} className="flex h-[36px] items-center gap-2 text-[14px] font-light text-mist">Music: <span className="text-ice">{SERVICE_LABEL[service]}</span> <span className="underline underline-offset-4">Change</span></button>
   );
 

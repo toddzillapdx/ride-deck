@@ -4,12 +4,24 @@ import { loadRide } from "@/lib/client";
 import { trackEvent } from "@/lib/events";
 import type { Ride } from "@/lib/engine";
 import RidePlayer from "./RidePlayer";
+import { isCuratedId } from "@/lib/curatedIds";
 
 export default function RideLoader({ id }: { id: string }) {
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    loadRide(id).then((r) => { setRide(r); trackEvent(id, "opened"); }).catch((e: Error) => setError(e.message));
+    (async () => {
+      // A published ride opened from an invitation link, by someone who has not chosen a music service yet: choose it first (the
+      // library asks, then brings them back here), so the ride opens with its playlist button.
+      if (isCuratedId(id)) {
+        try {
+          const res = await fetch("/api/curated", { cache: "no-store" });
+          const b = await res.json().catch(() => null);
+          if (res.ok && b && !b.service) { window.location.replace(`/?ride=${encodeURIComponent(id)}`); return; }
+        } catch { /* if this check fails, just open the ride */ }
+      }
+      return loadRide(id).then((r) => { setRide(r); trackEvent(id, "opened"); }).catch((e: Error) => setError(e.message));
+    })();
   }, [id]);
 
   if (ride) return <RidePlayer ride={ride} />;
